@@ -1,0 +1,10 @@
+bin/
+obj/
+publish/
+dist/
+# Analiz sırasında alınan üçüncü taraf görselleri ve klon yalnızca yerelde kalır
+rea/acadbek-lumabar/
+rea/*.png
+rea/*.json
+rea/*.log
+mock/bg.png

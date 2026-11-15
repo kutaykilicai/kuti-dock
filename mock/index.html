@@ -1,0 +1,50 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Kutay Dock maket</title>
+<style>
+/* WPF koduyla aynı ölçüler: dock 54 px, köşe 16; kart 48 px, köşe 16; uygulama düğmesi 42, simge 28 */
+html,body{margin:0;width:1440px;height:813px;overflow:hidden;background:#000 url(bg.png) no-repeat 0 0;font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;color:#F5F5F7}
+.dock{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);height:54px;border-radius:16px;background:rgba(20,20,22,.45);
+ backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;padding:0 1px;box-sizing:border-box;white-space:nowrap}
+.tile{height:48px;margin:0 2px;border-radius:16px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;padding:0 10px;box-sizing:border-box}
+.app{width:42px;height:46px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:10px}
+.card{width:50px;height:48px;margin:0 2px;border-radius:16px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.ico{width:28px;height:28px;border-radius:7px}
+.dot{position:absolute;bottom:1px;width:4px;height:4px;border-radius:2px;background:#0A84FF}
+.dim{color:rgba(245,245,247,.6)} .b{font-weight:600}
+.bar{height:5px;border-radius:3px;background:rgba(255,255,255,.2);width:74px;margin-right:6px;overflow:hidden}.bar i{display:block;height:100%;background:#30D158;border-radius:3px}
+.grid{display:grid;grid-template-columns:56px 80px 52px 36px;align-items:center;row-gap:2px;font-size:10px}
+.grid .r{text-align:right}
+</style></head><body>
+<div class="dock">
+  <div class="app"><svg width="22" height="22" viewBox="0 0 20 20"><path fill="#0A84FF" d="M0,0H9V9H0Z M11,0H20V9H11Z M0,11H9V20H0Z M11,11H20V20H11Z"/></svg></div>
+  <div class="app"><div class="ico" style="background:linear-gradient(#FFD45E,#F2A93B)"></div><span class="dot"></span></div>
+  <div class="app"><div class="ico" style="background:linear-gradient(#3BA1F0,#1F6FC5)"></div><span class="dot"></span></div>
+  <div class="app"><div class="ico" style="background:linear-gradient(#4CC3F5,#229ED9);border-radius:14px"></div><span class="dot"></span></div>
+  <div class="tile">
+    <div style="width:36px;height:36px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;margin-right:10px">
+      <svg width="18" height="18" viewBox="0 0 20 20"><path d="M10,0C11,6 14,9 20,10C14,11 11,14 10,20C9,14 6,11 0,10C6,9 9,6 10,0Z"/></svg></div>
+    <div class="grid"><span class="b">Oturum</span><div class="bar"><i style="width:41%"></i></div><span class="dim r">2s 40dk</span><span class="b r" style="font-size:11px">%41</span>
+      <span class="b">Haftalık</span><div class="bar"><i style="width:64%"></i></div><span class="dim r">Cum 20</span><span class="b r" style="font-size:11px">%64</span></div>
+  </div>
+  <div class="card"><div class="ico" style="background:#fff"></div></div>
+  <div class="card"><div class="ico" style="background:conic-gradient(#EA4335 0 33%,#FBBC05 0 66%,#34A853 0);border-radius:14px"></div></div>
+  <div class="card"><div class="ico" style="background:linear-gradient(#1B3A6B,#0E1F3D);border-radius:14px"></div></div>
+  <div class="card"><div class="ico" style="background:#E74C1C"></div></div>
+  <div class="card"><div class="ico" style="background:#D8241C"></div></div>
+  <div class="card"><div class="ico" style="background:linear-gradient(#FF8A00,#F25C05)"></div></div>
+  <div class="card"><div class="ico" style="background:radial-gradient(#7B61FF,#1E1E2E);border-radius:14px"></div></div>
+  <div class="card"><div class="ico" style="background:#001E36;border:1px solid #31A8FF;box-sizing:border-box"></div></div>
+  <div class="tile">
+    <div style="width:30px;text-align:center;margin-right:10px"><div style="color:#FF453A;font-size:9px;font-weight:700">PZT</div><div style="font-size:18px">16</div></div>
+    <div><div style="display:flex;align-items:center"><span style="width:3px;height:14px;border-radius:2px;background:#FF9F0A;margin-right:6px"></span><span class="b" style="font-size:11px">Calculus lecture</span></div>
+    <div class="dim" style="font-size:10px">14:30 · 1s 27dk sonra</div></div>
+  </div>
+  <div class="tile" style="width:48px;padding:0;border:0;overflow:hidden;background:#1F2C3A;position:relative;justify-content:center">
+    <div style="position:absolute;bottom:0;left:0;right:0;height:78%;background:linear-gradient(#4DA8FF,#0A6CE0)"></div>
+    <span class="b" style="position:relative;font-size:14px">⚡78</span></div>
+  <div class="tile" style="width:50px;justify-content:center;padding:0"><svg width="12" height="12" viewBox="0 0 16 12"><path fill="rgba(245,245,247,.6)" d="M2,9L8,3L14,9L12.6,10.4L8,5.8L3.4,10.4Z"/></svg></div>
+  <div class="tile">
+    <div style="margin-right:16px"><div style="color:#FF453A;font-size:10px;font-weight:600">PAZARTESİ</div><div class="b" style="font-size:15px">16 Kas</div></div>
+    <div style="text-align:right"><div class="b" style="font-size:16px">01:03</div><div class="dim" style="font-size:10px">☀ 24°</div></div>
+  </div>
+</div>
+</body></html>

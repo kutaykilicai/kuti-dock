@@ -1,0 +1,79 @@
+KUTAY DOCK 1.0  ·  Windows 10/11 için akıllı dock  ·  MIT
+==========================================================
+
+Ne bu?
+  Ekranın altında (istersen üstünde) yüzen, yuvarlak köşeli bir dock.
+  Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
+  davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
+  ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+ÇALIŞTIRMA
+  1) KutayDock.exe'ye çift tıkla. Kurulum yok, yönetici izni gerekmez.
+     Tek dosya; .NET kurulu olmasa da çalışır (self-contained, win-x64).
+  2) İlk açılışta SmartScreen "Windows bilgisayarınızı korudu" diyebilir
+     (imzasız exe): "Ek bilgi" > "Yine de çalıştır".
+  3) Tepside (saatin yanında) ikon belirir. Sol tık: Ayarlar. Sağ tık:
+     Ayarlar / Dock'u gizle-göster / Ayar klasörü / Çıkış.
+  4) Dock'a sağ tıkla: Ayarlar, Widget'lar, Görev Yöneticisi, Masaüstünü göster, Çıkış.
+  Otomatik başlatma EKLENMEDİ. İstersen kısayolunu kendin
+  shell:startup klasörüne koyarsın.
+
+İLK AYARLAR (önerilen)
+  - Ayarlar > Takvim: Google/Outlook/iCloud "gizli iCal adresi"ni yapıştır.
+  - Ayarlar > Hava durumu: varsayılan İstanbul (41.01, 28.97).
+  - Ayarlar > Yapay zekâ: "Codex (ChatGPT)" seçersen yüzdeler Codex CLI'nin
+    kendi kaydından birebir gelir. "Claude Code" seçersen ~/.claude kayıtlarındaki
+    token'lar sayılır; yüzde, senin gireceğin token limitine göre TAHMİNDİR.
+  - lumabar gibi tam "görev çubuğu yerine" his için: Ayarlar > Davranış >
+    "Windows görev çubuğunu otomatik gizle" (varsayılan KAPALI). Kutay Dock
+    kapanınca görev çubuğu eski hâline döner.
+
+HAZIR WIDGET'LAR (gerçekten çalışan çekirdek set, 12 adet)
+  1. Başlat düğmesi ............ Başlat menüsünü açar
+  2. Uygulamalar ............... Görev çubuğuna sabitlenmiş uygulamalar + açık pencereler.
+                                 Tıkla: aç / öne getir / zaten öndeyse küçült; birden çok
+                                 pencerede sıradakine geçer. Sağ tık: pencere listesi,
+                                 Yeni pencere, Kapat. Üstüne gelince büyür, çalışanların
+                                 altında mavi nokta; çalışmayan sabitlenmiş uygulama kendi kartında.
+  3. Yapay zekâ ................ "Oturum / Haftalık" çubukları, sıfırlanma süresi, yüzde
+  4. Şimdi çalan ............... Spotify/YouTube/her medya: başlık, sanatçı, önceki/oynat/sonraki
+  5. Ses ...................... Kaydırıcı, tekerlekle ayar, simgeye tıkla = sessiz
+  6. Sistem ................... CPU / RAM / GPU halkaları; tıkla = Görev Yöneticisi
+  7. Ağ ....................... İndirme/yükleme hızı + canlı grafik
+  8. Ekran süresi ............. Bugünkü toplam, saatlik sütunlar, en çok kullanılan 5 uygulama
+                                 (yalnızca bu PC'de, %APPDATA%\KutayDock\ekran-suresi.json)
+  9. Takvim ................... Sıradaki etkinlik: "14:30 · 1s 27dk sonra" (iCal, 15 dk'da bir)
+ 10. Pil ...................... Mavi pil kartı (pil yoksa, yani masaüstü PC'de görünmez)
+ 11. Gizli simgeler (^) ....... Windows tepsi taşma menüsünü açar
+ 12. Saat + tarih + hava ...... Türkçe gün adı, saat, Open-Meteo hava durumu
+  + Akıllı uyarılar: toplantıdan X dk önce bildirim ve müziği duraklatma,
+    yapay zekâ limiti eşiği (%85), pil azaldı; sessiz saatlerde (23-08) bekletilir.
+  + Tam ekran oyun/video varken dock çekilir ve ölçüm yapmaz (oyunda ek yük yok).
+  + Ekranda yer ayırma (AppBar): büyütülmüş pencereler dock'un altına girmez.
+  + 4 stil: Cam (bulanık), Siyah, Gece, Beyaz · Altta/Üstte · 3 boyut · Tam genişlik.
+
+OLMAYANLAR (dürüst liste)
+  - lumabar'ın "100+ widget"ının çoğu yok: Stripe/Polar/Shopify/Gumroad gelir
+    kartları, GitHub, X takipçi, borsa, kripto, WhatsApp, döviz, pomodoro,
+    not, yapılacaklar, dünya saatleri, parlaklık, hızlı ayar (Wi-Fi/Bluetooth) vb.
+  - "Liquid Glass" (arka planı canlı kıran cam) yok; yerine Windows bulanıklığı var.
+  - Widget'ları sürükle-bırak ile dizme yok; sıra Ayarlar'da oklarla değişir.
+  - Dock'u sürükleyip üste yapıştırma yok; Ayarlar > Konum.
+  - Uygulama grupları, pencere canlı önizlemesi, okunmamış rozetleri yok.
+  - Gerçek tepsi simgeleri ızgarası yok (^ düğmesi Windows'un kendi menüsünü açar).
+  - Claude için resmi limit yüzdesi okunmuyor (resmi yerel kaynak yok), tahmin.
+  - Mağaza (UWP) uygulamalarının penceresi bazen genel simgeyle görünebilir.
+  - Yalnızca ana monitörde çalışır.
+
+TEST DURUMU
+  - Derleme: hatasız. Mantık katmanı 24 birim testi geçti (iCal, AI kullanım,
+    uyarı motoru, ekran süresi, hava, ayarlar).
+  - Windows'ta henüz HİÇ çalıştırılmadı (box Linux, Kasa çevrimdışıydı).
+    İlk açılışta bir sorun olursa: %APPDATA%\KutayDock\hata.log dosyasını gönder.
+
+VERİLER
+  %APPDATA%\KutayDock\ayarlar.json      ayarlar
+  %APPDATA%\KutayDock\ekran-suresi.json ekran süresi (35 gün)
+  %APPDATA%\KutayDock\hata.log          hata kaydı
+  Hesap yok, telemetri yok. Dışarı çıkan tek şey: hava durumu (open-meteo.com)
+  ve senin eklediğin iCal adresleri.
