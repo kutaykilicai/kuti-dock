@@ -115,6 +115,18 @@ public class TaskbarGeometryTests
     }
 }
 
+public class ThumbTests
+{
+    [Fact]
+    public void FitKeepsAspectAndCenters()
+    {
+        Assert.Equal((10.0, 9.75, 200.0, 112.5), Thumb.Fit(10, 0, 200, 132, 2560, 1440)); // yatay pencere
+        var t = Thumb.Fit(0, 0, 200, 132, 1000, 2000); // dikey pencere
+        Assert.Equal(66, t.W); Assert.Equal(132, t.H); Assert.Equal(67, t.X);
+        Assert.Equal((0.0, 0.0, 200.0, 132.0), Thumb.Fit(0, 0, 200, 132, 0, 0));
+    }
+}
+
 public class AlertTests
 {
     static readonly DateTimeOffset Noon = new(2026, 11, 16, 12, 0, 0, TimeSpan.FromHours(3));

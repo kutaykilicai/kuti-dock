@@ -103,9 +103,9 @@ namespace KutayDock.Tiles
         FrameworkElement MakeButton(AppItem item, bool active)
         {
             double size = 42 * K;
-            var img = new Image { Width = 28 * K, Height = 28 * K, Source = ShellIcons.Get(item.IconPath), SnapsToDevicePixels = true };
+            var img = new Image { Width = 28 * K, Height = 28 * K, Source = ShellIcons.Get(item.IconPath) ?? ShellIcons.Generic, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
-            UIElement icon = img.Source != null ? img : Ui.Text(item.Name.Length > 0 ? item.Name[..1].ToUpper() : "?", 16 * K, T.Fg, FontWeights.SemiBold);
+            UIElement icon = img;
             var scale = new ScaleTransform(1, 1);
             FrameworkElement outer = null;
             var iconHost = new Border { Child = icon, RenderTransform = scale, RenderTransformOrigin = new Point(0.5, 0.75) };
@@ -139,11 +139,14 @@ namespace KutayDock.Tiles
                 var a = new DoubleAnimation(v, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
                 scale.BeginAnimation(ScaleTransform.ScaleXProperty, a); scale.BeginAnimation(ScaleTransform.ScaleYProperty, a);
             }
-            btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; Zoom(1.22); };
-            btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; Zoom(1.0); };
+            // Windows 11 gibi: üzerinde biraz bekleyince açık pencerelerin canlı önizlemesi
+            var hover = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+            hover.Tick += (_, _) => { hover.Stop(); if (btn.IsMouseOver) Preview((AppItem)outer.Tag, btn); };
+            btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; Zoom(1.22); hover.Start(); };
+            btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; Zoom(1.0); hover.Stop(); };
             btn.PreviewMouseLeftButtonDown += (_, _) => Zoom(1.05);
             btn.MouseLeftButtonUp += (_, e) => { Zoom(1.22); Click((AppItem)outer.Tag, btn); e.Handled = true; };
-            btn.MouseRightButtonUp += (_, e) => { Menu((AppItem)outer.Tag, btn); e.Handled = true; };
+            btn.MouseRightButtonUp += (_, e) => { WindowPreview.CloseCurrent(); Menu((AppItem)outer.Tag, btn); e.Handled = true; };
             return outer;
         }
 
@@ -151,11 +154,18 @@ namespace KutayDock.Tiles
         {
             var alive = it.Windows.Where(Native.IsWindowVisible).ToList();
             if (alive.Count == 0) { Launch(it); return; }
-            if (alive.Count > 1) { Menu(it, target, chooser: true); return; } // birden çok pencere: hangisi?
+            if (alive.Count > 1) { Preview(it, target); return; } // birden çok pencere: önizleme panelinden seç
+            WindowPreview.CloseCurrent();
             var fg = Native.GetForegroundWindow();
             if (alive[0] == fg) Native.ShowWindow(fg, Native.SW_MINIMIZE);
             else Native.Activate(alive[0]);
             _signature = ""; // aktif göstergesini tazele
+        }
+
+        void Preview(AppItem it, FrameworkElement anchor)
+        {
+            if (it.Windows.Count == 0) return;
+            WindowPreview.Open(it.Key, it.Windows, img(it) ?? ShellIcons.Generic, anchor, S.Settings.Edge == KutayDock.Core.DockEdge.Ust);
         }
 
         static void Launch(AppItem it)
@@ -164,8 +174,8 @@ namespace KutayDock.Tiles
             try { Process.Start(new ProcessStartInfo(it.Launch) { UseShellExecute = true }); } catch (Exception) { }
         }
 
-        /// <summary>Pencere listesi. chooser: sol tıkta açılan seçim listesi (kapatma seçeneği yok).</summary>
-        void Menu(AppItem it, FrameworkElement target, bool chooser = false)
+        /// <summary>Sağ tık: pencere listesi, yeni pencere, kapat.</summary>
+        void Menu(AppItem it, FrameworkElement target)
         {
             var m = new ContextMenu();
             var fg = Native.GetForegroundWindow();
@@ -184,7 +194,7 @@ namespace KutayDock.Tiles
                 var n = new MenuItem { Header = it.Windows.Count > 0 ? "Yeni pencere" : "Aç" };
                 n.Click += (_, _) => Launch(it); m.Items.Add(n);
             }
-            if (it.Windows.Count > 0 && !chooser)
+            if (it.Windows.Count > 0)
             {
                 var c = new MenuItem { Header = it.Windows.Count > 1 ? "Tüm pencereleri kapat" : "Pencereyi kapat" };
                 c.Click += (_, _) => { foreach (var h in it.Windows) Native.PostMessage(h, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero); };

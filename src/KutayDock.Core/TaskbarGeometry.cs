@@ -24,3 +24,15 @@ public static class TaskbarGeometry
         return left ? new Box(mon.Left, bar.Top, mon.Left + 2, bar.Bottom) : new Box(mon.Right - 2, bar.Top, mon.Right, bar.Bottom);
     }
 }
+
+public static class Thumb
+{
+    /// <summary>Kaynak en-boy oranını koruyarak kutuya sığdır ve ortala (x, y, genişlik, yükseklik).</summary>
+    public static (double X, double Y, double W, double H) Fit(double boxX, double boxY, double boxW, double boxH, double srcW, double srcH)
+    {
+        if (srcW <= 0 || srcH <= 0) return (boxX, boxY, boxW, boxH);
+        double k = Math.Min(boxW / srcW, boxH / srcH);
+        double w = srcW * k, h = srcH * k;
+        return (boxX + (boxW - w) / 2, boxY + (boxH - h) / 2, w, h);
+    }
+}

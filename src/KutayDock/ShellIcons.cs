@@ -35,8 +35,9 @@ namespace KutayDock
             try
             {
                 SHCreateItemFromParsingName(path, IntPtr.Zero, typeof(IShellItemImageFactory).GUID, out var f);
-                // 0x1 = SIIGBF_BIGGERSIZEOK, 0x10 = SIIGBF_ICONONLY
-                if (f.GetImage(new SIZE { cx = px, cy = px }, 0x11, out IntPtr hbm) == 0 && hbm != IntPtr.Zero)
+                // 0x1 = SIIGBF_BIGGERSIZEOK, 0x4 = SIIGBF_ICONONLY. (1.1'de yanlışlıkla 0x10 = SIIGBF_INCACHEONLY
+                // kullanılıyordu: simgesi kabuk önbelleğinde olmayan uygulamalar — çoğu Mağaza/UWP — harfle görünüyordu.)
+                if (f.GetImage(new SIZE { cx = px, cy = px }, 0x5, out IntPtr hbm) == 0 && hbm != IntPtr.Zero)
                 {
                     try { img = FromHBitmap(hbm); } finally { DeleteObject(hbm); }
                 }
@@ -56,6 +57,23 @@ namespace KutayDock
             Cache[path] = img;
             return img;
         }
+
+        /// <summary>Simgesi hiç çözülemeyen uygulamalar için Windows'un genel uygulama simgesi.</summary>
+        public static ImageSource Generic
+        {
+            get
+            {
+                if (_generic != null) return _generic;
+                try
+                {
+                    _generic = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(System.Drawing.SystemIcons.Application.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                    _generic.Freeze();
+                }
+                catch (Exception) { }
+                return _generic;
+            }
+        }
+        static ImageSource _generic;
 
         static BitmapSource FromHBitmap(IntPtr hbm)
         {

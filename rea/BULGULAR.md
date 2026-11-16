@@ -55,3 +55,16 @@ uygulaması olduğu ve box'ta çalıştırılamadığı için defter GEREKSINIML
 - Ekran görüntüsü için lumabar'ın değil, ShareX'in resmî komut satırı belgesi (getsharex.com/docs/command-line-arguments) kullanıldı.
 - Limit kaynakları: Grok Bot ve Cursor için belgelenmiş kişisel kullanım API'si bulunamadı (Cursor Admin API yalnızca
   Enterprise). Cursor plan adı belgelenmiş CLI komutu `agent about --format json` ile alınıyor.
+
+## 1.2 eki: Grok Bot kullanımı nereden okunabilir? (Nowdex incelemesi, 16 Kasım 2026)
+- Kaynak: nowdex.app/blog/grok-bot-usage yazısı ve Kutay'ın gönderdiği Nowdex 1.4.1 (build 245) macOS paketi
+  (Mach-O x86_64, sha256 d2e11acd…). Nowdex'in kendi lisans dosyası yok (ticari); yalnızca üçüncü taraf lisansları
+  (Sparkle, RevenueCat, SwiftProtobuf, libsodium vb.) var. Kod kopyalanmadı.
+- REA: open_binary başarılı; Ghidra 12.1.2 sağlayıcısı 20 MB'lık Swift ikilisinde REA zaman sınırını (330 sn) aştı,
+  ayrıştırma/pseudocode alınamadı. Dize envanteri `strings` ile çıkarıldı.
+- Bulgu: Nowdex Grok Bot kullanımını yerel bir dosyadan OKUMUYOR. Kullanıcıyı Cursor'un tarayıcı giriş akışıyla
+  (cursor.com/loginDeepControl + api2.cursor.sh/auth/poll) bağlıyor, oturum belirtecini Anahtar Zinciri'nde tutuyor ve
+  belgelenmemiş dahili uç noktaları çağırıyor: `cursor.com/api/dashboard/get-sand-usage-status` ("sand" = Grok Bot;
+  alanlar: hasNonZeroIncludedLimit, includedLimitZero, nextResetTimestampUtc, sandTrialExpiresAt), `cursor.com/api/usage-summary`
+  (WorkosCursorSessionToken çerezi ile) ve `api2.cursor.sh/aiserver.v1.DashboardService/*` (GetCurrentPeriodUsage, GetPlanInfo).
+- Karar: belgelenmemiş dahili API + oturum belirteci gerektirdiği için Kutay Dock'a EKLENMEDİ; Kutay'ın kararı bekleniyor.

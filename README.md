@@ -1,8 +1,8 @@
 # Kutay Dock
 
-Windows 10/11 için ekranın altında yüzen, canlı widget'lı akıllı dock. C# / .NET 8 / WPF. Sürüm 1.1.
+Windows 10/11 için ekranın altında yüzen, canlı widget'lı akıllı dock. C# / .NET 8 / WPF. Sürüm 1.2.
 
-Widget'lar: Başlat, Uygulamalar (çoklu pencere seçimi, UWP simgeleri), Limitler (Grok Bot;
+Widget'lar: Başlat, Uygulamalar (Windows 11 tarzı canlı pencere önizlemesi, UWP simgeleri), Limitler (Grok Bot;
 tıklayınca Cursor), Ses, Sistem, Ağ, Depolama, Ekran görüntüsü (ShareX), Pil, Gizli simgeler, Saat/hava.
 İsteğe bağlı: Windows görev çubuğunu (hangi kenarda olursa olsun, çoklu monitör) otomatik gizleme.
 

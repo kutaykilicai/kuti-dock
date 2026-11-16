@@ -1,4 +1,4 @@
-KUTAY DOCK 1.1  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.2  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,17 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.2'DE NE DEĞİŞTİ
+  + Pencere önizleme paneli (Windows 11 görev çubuğu gibi): uygulama simgesinin
+    üzerinde biraz bekleyince açılır; yuvarlak köşeli koyu panelde her pencere
+    için simge + başlık + canlı küçük önizleme. Tıkla = o pencere öne gelir;
+    orta tık ya da × = pencereyi kapat. Birden çok penceresi olan uygulamaya
+    tıklayınca da bu panel açılır (eski XP tarzı menü kaldırıldı).
+  + "A"/"N" harfli simgeler düzeldi: simge yalnızca Windows'un simge
+    önbelleğinden isteniyordu; önbellekte olmayan (çoğu Mağaza/UWP) uygulamalar
+    harfle görünüyordu. Artık simge her zaman üretilir; yine bulunamazsa harf
+    yerine Windows'un genel uygulama simgesi gösterilir.
 
 1.1'DE NE DEĞİŞTİ
   + Limitler widget'ı: Grok Bot haftalık limiti; tıklayınca Cursor limitleri paneli.
@@ -62,8 +73,8 @@ HAZIR WIDGET'LAR (11 adet)
   1. Başlat düğmesi ............ Başlat menüsünü açar
   2. Uygulamalar ............... Sabitlenmiş uygulamalar + açık pencereler.
                                  Tıkla: aç / öne getir / zaten öndeyse küçült; birden çok
-                                 pencere varsa seçim listesi. Sağ tık: pencere listesi,
-                                 Yeni pencere, Kapat.
+                                 pencere varsa önizleme paneli. Üzerinde bekle = canlı
+                                 önizleme. Sağ tık: pencere listesi, Yeni pencere, Kapat.
   3. Limitler .................. Grok Bot haftalık; tıkla = Cursor paneli
   4. Ses ...................... Kaydırıcı, tekerlekle ayar, simgeye tıkla = sessiz
   5. Sistem ................... CPU / RAM / GPU halkaları; tıkla = Görev Yöneticisi
@@ -81,11 +92,14 @@ HAZIR WIDGET'LAR (11 adet)
 
 OLMAYANLAR (dürüst liste)
   - Grok Bot ve Cursor limitleri otomatik güncellenmez (belgelenmiş kaynak yok).
+    Nowdex gibi uygulamalar bunu Cursor hesabıyla giriş yapıp Cursor'un
+    belgelenmemiş dahili uç noktalarından okuyor; bu yol Kutay'ın onayı olmadan
+    eklenmedi.
   - lumabar'ın "100+ widget"ının çoğu yok (gelir kartları, GitHub, borsa, kripto,
     pomodoro, yapılacaklar, dünya saatleri, parlaklık, hızlı ayarlar vb.).
   - "Liquid Glass" yok; yerine Windows bulanıklığı var.
   - Widget'ları sürükle-bırak ile dizme yok; sıra Ayarlar'da oklarla değişir.
-  - Pencere canlı önizlemesi, okunmamış rozetleri yok.
+  - Okunmamış rozetleri yok.
   - Dock yalnızca ana monitörde durur.
   - Otomatik gizlemenin yedek yolunda çubuk kenara gelince ~0,15 sn içinde
     açılır; gizliyken o kenardaki boşluk (çubuk yüksekliği) Windows tarafından
@@ -94,7 +108,7 @@ OLMAYANLAR (dürüst liste)
     Dock'u yeniden aç (açılışta çubukları geri getirir) ya da oturumu kapat-aç.
 
 TEST DURUMU
-  - Derleme hatasız. Mantık katmanı 28 birim testi geçti (biçim, limitler,
+  - Derleme hatasız. Mantık katmanı 29 birim testi geçti (biçim, limitler, önizleme oranı,
     Cursor plan okuma, ShareX argümanları, görev çubuğu kenar geometrisi,
     uyarı motoru, ayar taşıma, hava, ayarlar).
 
