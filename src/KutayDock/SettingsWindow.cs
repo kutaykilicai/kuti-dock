@@ -20,8 +20,8 @@ namespace KutayDock
 
         static readonly (string id, string name)[] AllWidgets =
         {
-            ("start", "Başlat düğmesi"), ("search", "Ara (Everything)"), ("apps", "Uygulamalar (sabitlenenler + açık pencereler)"), ("ai", "Limitler (Grok Bot; tıklayınca Cursor)"),
-            ("volume", "Ses"), ("system", "Sistem (CPU / RAM / GPU)"), ("network", "Ağ hızı"),
+            ("start", "Başlat düğmesi"), ("search", "Ara (Windows araması; ayarda Everything)"), ("apps", "Uygulamalar (sabitlenenler + açık pencereler)"), ("ai", "Limitler (Grok Bot; tıklayınca Cursor)"),
+            ("volume", "Ses"), ("system", "Sistem (CPU / RAM / GPU)"), ("network", "Ağ hızı"), ("warp", "Cloudflare WARP bağlan / kes"),
             ("storage", "Depolama (disk boş alanı)"), ("screenshot", "Ekran görüntüsü (ShareX)"), ("battery", "Pil (yalnızca dizüstü)"), ("tray", "Gizli tepsi simgeleri (^)"), ("clock", "Saat, tarih ve hava durumu"),
         };
 
@@ -81,6 +81,10 @@ namespace KutayDock
             beh.Children.Add(Toggle("Ekranda dock için yer ayır (pencereler altına girmez)", _s.ReserveSpace, v => _s.ReserveSpace = v));
             beh.Children.Add(Toggle("Tam ekran oyun/videoda dock'u gizle", _s.HideOnFullscreen, v => _s.HideOnFullscreen = v));
             beh.Children.Add(Toggle("Windows görev çubuğunu otomatik gizle (çıkınca geri gelir)", _s.AutoHideWindowsTaskbar, v => _s.AutoHideWindowsTaskbar = v));
+            beh.Children.Add(Toggle("Windows görev çubuğunu tamamen kaldır (dock kapanınca/çökünce geri gelir)", _s.RemoveWindowsTaskbar, v => _s.RemoveWindowsTaskbar = v));
+            beh.Children.Add(Toggle("Aramada Everything kullan (kapalıyken Windows araması gibi)", _s.SearchWithEverything, v => _s.SearchWithEverything = v));
+            beh.Children.Add(Toggle("macOS büyütmesi (simgeler imlecin çevresinde büyür)", _s.Magnification, v => _s.Magnification = v));
+            beh.Children.Add(Toggle("Animasyonlar (açılış sıçraması, açılma/kapanma)", _s.Animations, v => _s.Animations = v));
 
             // Widget'lar
             var wid = Card(p, "Widget'lar");
@@ -135,7 +139,7 @@ namespace KutayDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.4.1 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.5 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }

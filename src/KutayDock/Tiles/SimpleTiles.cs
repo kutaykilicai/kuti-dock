@@ -18,7 +18,8 @@ namespace KutayDock.Tiles
             Child = Ui.Glyph(Ui.GStart, Theme.Accent, 22 * K);
             ToolTip = "Başlat";
             MouseEnter += (_, _) => Background = t.TileHover; MouseLeave += (_, _) => Background = Brushes.Transparent;
-            OnClick(() => Native.PressKeys(Native.VK_LWIN));
+            var glyph = (FrameworkElement)Child;
+            OnClick(() => { Anim.Hop(glyph, s.Settings.Edge, 6 * K); TaskbarRemover.OpenStart(); }); // görev çubuğu açılmadan yalnızca Başlat menüsü
             Ui.PressEffect(this);
         }
         public override void Refresh() { }
@@ -43,7 +44,7 @@ namespace KutayDock.Tiles
     internal sealed class ClockTile : Tile
     {
         public override string Id => "clock";
-        readonly TextBlock _day, _date, _time, _ampm, _weather;
+        readonly TextBlock _day, _date, _time, _ampm, _weather, _full;
         public ClockTile(Services s, Theme t) : base(s, t)
         {
             _day = Txt("", 10, w: FontWeights.SemiBold); _day.Foreground = Theme.Red;
@@ -54,7 +55,8 @@ namespace KutayDock.Tiles
             var left = Col(_day, _date); left.Margin = new Thickness(0, 0, 16 * K, 0);
             var tr = Row(_time, _ampm); tr.HorizontalAlignment = HorizontalAlignment.Right;
             var right = Col(tr, _weather);
-            Child = Row(left, right);
+            _full = Txt("", 9, true); _full.HorizontalAlignment = HorizontalAlignment.Center; // tam tarih: 16.11.2026
+            Child = Col(Row(left, right), _full);
             OnClick(() => Native.PressKeys(Native.VK_LWIN, (byte)'N')); // Windows 11: bildirimler + takvim
             Refresh();
         }
@@ -63,6 +65,7 @@ namespace KutayDock.Tiles
             var now = DateTime.Now;
             _day.Text = now.ToString("dddd", Format.Tr).ToUpper(Format.Tr);
             _date.Text = now.ToString("d MMM", Format.Tr);
+            _full.Text = now.ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
             if (S.Settings.Use24Hour) { _time.Text = now.ToString("HH:mm"); _ampm.Text = ""; }
             else { _time.Text = now.ToString("h:mm"); _ampm.Text = now.ToString("tt", System.Globalization.CultureInfo.InvariantCulture); }
             if (S.Weather is { } w)
@@ -107,18 +110,89 @@ namespace KutayDock.Tiles
         }
     }
 
-    /// <summary>CPU / RAM / GPU halkaları. Tıklayınca Görev Yöneticisi.</summary>
+    /// <summary>CPU / RAM / GPU halkaları. Tıklayınca Windows optimizasyonu paneli.</summary>
     internal sealed class SystemTile : Tile
     {
         public override string Id => "system";
-        readonly Ring _cpu, _ram, _gpu;
+        readonly Ring _cpu, _ram, _gpu; Popup _popup;
         public SystemTile(Services s, Theme t) : base(s, t)
         {
             Ring R(string cap) => new() { Width = 36 * K, Height = 36 * K, Caption = cap, Fg = t.Fg, Dim = t.FgDim, Track = t.Track, Margin = new Thickness(2 * K, 0, 2 * K, 0) };
             _cpu = R("CPU"); _ram = R("RAM"); _gpu = R("GPU");
             Child = Row(_cpu, _ram, _gpu);
-            OnClick(() => Run("taskmgr.exe"));
+            OnClick(ShowOptimize);
         }
+
+        /// <summary>
+        /// Windows optimizasyonu: RAM boşalt (çalışma kümeleri + bekleme listesi), geçici dosyalar (önce MB önizleme, sonra onay),
+        /// DNS önbelleği. Oyun açıkken düğmeler pasif. Tarayıcı verisine, oyunlara, Steam'e, anti-cheat'e, GPU sürücüsüne dokunulmaz.
+        /// </summary>
+        void ShowOptimize()
+        {
+            var game = Optimizer.RunningGame();
+            var dim = Theme.B("#99F5F5F7");
+            var p = new StackPanel { Width = 300 };
+            p.Children.Add(Ui.Text("Windows optimizasyonu", 15, Brushes.White, FontWeights.SemiBold));
+            var info = Ui.Text($"RAM {S.RamUsed / 1073741824.0:0.0}/{S.RamTotal / 1073741824.0:0.0} GB · CPU %{S.Cpu:0}" + (S.Gpu >= 0 ? $" · GPU %{S.Gpu:0}" : ""), 11, dim);
+            info.Margin = new Thickness(0, 4, 0, 0); p.Children.Add(info);
+            var status = new TextBlock { Foreground = dim, FontSize = 11, FontFamily = Theme.Font, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+            if (game != null) status.Text = $"Oyun açık ({game}): temizlik düğmeleri pasif.";
+
+            Button Btn(string text) => new()
+            {
+                Content = text, Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(10, 6, 10, 6), IsEnabled = game == null,
+                Foreground = Brushes.White, Background = Theme.B("#2C2C30"), BorderBrush = Theme.B("#33FFFFFF"), HorizontalContentAlignment = HorizontalAlignment.Left,
+                FontFamily = Theme.Font, FontSize = 12, Cursor = Cursors.Hand,
+            };
+            var ram = Btn("RAM'i boşalt (çalışma kümeleri + bekleme listesi)");
+            var scan = Btn("Geçici dosyaları tara");
+            var clean = Btn("Temizle"); clean.Visibility = Visibility.Collapsed; clean.Background = Theme.B("#0A84FF");
+            var dns = Btn("DNS önbelleğini temizle");
+            Optimizer.TempScan found = null;
+
+            ram.Click += async (_, _) =>
+            {
+                ram.IsEnabled = false; status.Text = "RAM boşaltılıyor…";
+                long before = UsedRam();
+                int n = await System.Threading.Tasks.Task.Run(Optimizer.TrimWorkingSets);
+                bool standby = await Optimizer.PurgeStandbyAsync();
+                await System.Threading.Tasks.Task.Delay(1200);
+                long freed = Math.Max(0, before - UsedRam());
+                status.Text = $"{n} sürecin çalışma kümesi küçültüldü" + (standby ? ", bekleme listesi boşaltıldı" : ", bekleme listesi için yönetici izni alınamadı") + $". Kullanılan RAM ~{Format.Bytes(freed)} azaldı.";
+                ram.IsEnabled = Optimizer.RunningGame() == null;
+            };
+            scan.Click += async (_, _) =>
+            {
+                scan.IsEnabled = false; clean.Visibility = Visibility.Collapsed; status.Text = "Taranıyor…";
+                found = await Optimizer.ScanAsync();
+                status.Text = $"Silinebilir (24 saatten eski): kullanıcı Temp {Format.Bytes(found.UserBytes)} ({found.UserFiles} dosya), Windows\\Temp {Format.Bytes(found.WinBytes)} ({found.WinFiles} dosya). Toplam {Format.Bytes(found.Total)}. Tarayıcı verisine dokunulmaz.";
+                clean.Content = $"Onayla: {Format.Bytes(found.Total)} sil";
+                clean.Visibility = found.Total > 0 ? Visibility.Visible : Visibility.Collapsed;
+                scan.IsEnabled = true;
+            };
+            clean.Click += async (_, _) =>
+            {
+                if (Optimizer.RunningGame() is { } g) { status.Text = $"Oyun açık ({g}): temizlik yapılmadı."; return; }
+                clean.IsEnabled = false; scan.IsEnabled = false; status.Text = "Siliniyor…";
+                long freed = await Optimizer.CleanAsync(found != null && found.WinFiles > 0);
+                status.Text = $"Kullanıcı Temp: {Format.Bytes(freed)} silindi" + (found is { WinFiles: > 0 } ? ", Windows\\Temp yönetici olarak temizlendi" : "") + ". Kullanımdaki dosyalar atlandı; DNS önbelleği temizlendi.";
+                clean.Visibility = Visibility.Collapsed; clean.IsEnabled = true; scan.IsEnabled = true;
+            };
+            dns.Click += (_, _) => status.Text = Optimizer.FlushDns() ? "DNS önbelleği temizlendi." : "DNS önbelleği temizlenemedi.";
+
+            foreach (var b in new UIElement[] { ram, scan, clean, dns, status }) p.Children.Add(b);
+            p.Children.Add(Pop.Link("Görev Yöneticisi", () => { _popup.IsOpen = false; Run("taskmgr.exe"); }));
+            if (_popup != null) _popup.IsOpen = false;
+            _popup = Pop.Make(this, p, S.Settings.Edge);
+            _popup.IsOpen = true;
+        }
+
+        static long UsedRam()
+        {
+            var m = new Native.MEMORYSTATUSEX { dwLength = (uint)System.Runtime.InteropServices.Marshal.SizeOf<Native.MEMORYSTATUSEX>() };
+            return Native.GlobalMemoryStatusEx(ref m) ? (long)(m.ullTotalPhys - m.ullAvailPhys) : 0;
+        }
+
         public override void Refresh()
         {
             Set(_cpu, S.Cpu); Set(_ram, S.Ram);
@@ -170,13 +244,42 @@ namespace KutayDock.Tiles
             _pct = Txt("", 10, true); _pct.HorizontalAlignment = HorizontalAlignment.Right;
             var top = new DockPanel();
             DockPanel.SetDock(_pct, Dock.Right); top.Children.Add(_pct);
+            var devices = new Border { Child = Ui.Glyph("M2,9L8,3L14,9L12.6,10.4L8,5.8L3.4,10.4Z", t.FgDim, 8 * K), Cursor = Cursors.Hand, Background = Brushes.Transparent, Padding = new Thickness(6 * K, 0, 6 * K, 0), ToolTip = "Ses çıkış aygıtı" };
+            devices.MouseLeftButtonUp += (_, e) => { ShowDevices(); e.Handled = true; };
+            DockPanel.SetDock(devices, Dock.Right); top.Children.Add(devices);
             top.Children.Add(Row(icon, label));
             _slider = new Slider { Minimum = 0, Maximum = 100, Margin = new Thickness(0, 2 * K, 0, 0), Style = PillSlider(t), Height = 14 * K };
             _slider.ValueChanged += (_, e) => { if (!_updating) { S.Audio.SetLevel((float)(e.NewValue / 100)); _pct.Text = $"%{e.NewValue:0}"; } };
             Child = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { top, _slider } };
+            MouseRightButtonUp += (_, e) => { ShowDevices(); e.Handled = true; };
             MouseWheel += (_, e) => { _slider.Value = Math.Clamp(_slider.Value + (e.Delta > 0 ? 2 : -2), 0, 100); e.Handled = true; };
             Refresh();
         }
+        Popup _popup;
+
+        /// <summary>Ses çıkış aygıtı listesi; tıklanan aygıt varsayılan olur (tüm roller).</summary>
+        void ShowDevices()
+        {
+            var p = new StackPanel();
+            p.Children.Add(Ui.Text("Ses çıkışı", 15, Brushes.White, FontWeights.SemiBold));
+            var list = S.Audio.Outputs();
+            if (list.Count == 0) p.Children.Add(Ui.Text("Aygıt bulunamadı", 12, Theme.B("#99F5F5F7")));
+            foreach (var d in list)
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+                var mark = Ui.Text(d.IsDefault ? "✓" : "", 12, Theme.Accent, FontWeights.SemiBold); mark.Width = 18;
+                DockPanel.SetDock(mark, Dock.Left); row.Children.Add(mark);
+                row.Children.Add(Ui.Text(d.Name, 12, Brushes.White, d.IsDefault ? FontWeights.SemiBold : FontWeights.Normal, 280));
+                var id = d.Id;
+                row.MouseLeftButtonUp += (_, e) => { S.Audio.SetDefault(id); _popup.IsOpen = false; Refresh(); e.Handled = true; };
+                p.Children.Add(row);
+            }
+            p.Children.Add(Pop.Link("Ses ayarları", () => { _popup.IsOpen = false; Run("ms-settings:sound"); }));
+            if (_popup != null) _popup.IsOpen = false;
+            _popup = Pop.Make(this, p, S.Settings.Edge);
+            _popup.IsOpen = true;
+        }
+
         public override void Refresh()
         {
             if (_slider.IsMouseCaptureWithin) return;

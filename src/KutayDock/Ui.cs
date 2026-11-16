@@ -49,6 +49,58 @@ namespace KutayDock
 
     }
 
+    /// <summary>Açılma/kapanma animasyonları (Gravitone'un yumuşak geçişlerinden esinlenildi; ayarlardan kapatılabilir).</summary>
+    internal static class Anim
+    {
+        public static bool Enabled = true;
+        static readonly IEasingFunction Out = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        static Point Origin(KutayDock.Core.DockEdge e) => e switch
+        {
+            KutayDock.Core.DockEdge.Ust => new Point(0.5, 0), KutayDock.Core.DockEdge.Sol => new Point(0, 0.5),
+            KutayDock.Core.DockEdge.Sag => new Point(1, 0.5), _ => new Point(0.5, 1),
+        };
+
+        /// <summary>Panel dock'tan doğru büyüyerek ve belirerek açılır (macOS menü/panel hissi).</summary>
+        public static void PopIn(UIElement el, KutayDock.Core.DockEdge edge)
+        {
+            if (!Enabled || el == null) return;
+            if (el is Window w) { el = w.Content as UIElement; if (el == null) return; }
+            var st = new ScaleTransform(0.92, 0.92);
+            el.RenderTransform = st; el.RenderTransformOrigin = Origin(edge);
+            var d = TimeSpan.FromMilliseconds(190);
+            var a = new DoubleAnimation(0.92, 1, d) { EasingFunction = Out };
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, a); st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+            el.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)));
+        }
+
+        /// <summary>Tek zıplama (Başlat düğmesi): parabol, ekranın içine doğru.</summary>
+        public static void Hop(FrameworkElement el, KutayDock.Core.DockEdge edge, double height)
+        {
+            if (!Enabled) return;
+            var tt = el.RenderTransform as TranslateTransform ?? new TranslateTransform();
+            el.RenderTransform = tt;
+            double sign = edge is KutayDock.Core.DockEdge.Alt or KutayDock.Core.DockEdge.Sag ? -1 : 1;
+            var prop = edge is KutayDock.Core.DockEdge.Sol or KutayDock.Core.DockEdge.Sag ? TranslateTransform.XProperty : TranslateTransform.YProperty;
+            tt.BeginAnimation(prop, new DoubleAnimation(0, sign * height, TimeSpan.FromMilliseconds(150)) { AutoReverse = true, EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+        }
+
+        /// <summary>Dock belirir/çekilir: kaydırma + saydamlık (yaklaşık Gravitone gizle/göster hızı).</summary>
+        public static void Slide(Window w, FrameworkElement body, KutayDock.Core.DockEdge edge, bool show, Action done = null)
+        {
+            if (!Enabled) { w.Opacity = 1; done?.Invoke(); return; }
+            var tt = body.RenderTransform as TranslateTransform ?? new TranslateTransform();
+            body.RenderTransform = tt;
+            double off = 14 * (edge is KutayDock.Core.DockEdge.Alt or KutayDock.Core.DockEdge.Sag ? 1 : -1);
+            var prop = edge is KutayDock.Core.DockEdge.Sol or KutayDock.Core.DockEdge.Sag ? TranslateTransform.XProperty : TranslateTransform.YProperty;
+            var d = TimeSpan.FromMilliseconds(show ? 220 : 150);
+            tt.BeginAnimation(prop, new DoubleAnimation(show ? off : 0, show ? 0 : off, d) { EasingFunction = Out });
+            var fade = new DoubleAnimation(show ? 0 : 1, show ? 1 : 0, d);
+            fade.Completed += (_, _) => { w.BeginAnimation(UIElement.OpacityProperty, null); w.Opacity = 1; done?.Invoke(); };
+            w.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+    }
+
     /// <summary>Halka gösterge (CPU/RAM/GPU).</summary>
     internal sealed class Ring : FrameworkElement
     {

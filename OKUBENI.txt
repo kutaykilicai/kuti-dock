@@ -1,4 +1,4 @@
-KUTAY DOCK 1.4.1  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.5  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,36 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.5'TE NE DEĞİŞTİ
+  + macOS hissi: uygulama simgeleri imlecin çevresinde büyür (kosinüs
+    büyütmesi), kapalı bir uygulama açılırken simgesi pencere gelene kadar
+    sıçrar, dock ve paneller kayarak/büyüyerek açılıp kapanır. Ayarlar >
+    Davranış'tan "macOS büyütmesi" ve "Animasyonlar" kapatılabilir.
+  + Windows görev çubuğunu tamamen kaldır (Ayarlar > Davranış): dock
+    çalışırken görev çubuğu hiç görünmez; dock kapanınca ya da çökünce
+    görünmez bir "bekçi" süreci onu geri getirir. Explorer yeniden
+    başlatılmaz. Görev çubuğunu otomatik gizleyenlerde kendiliğinden açılır.
+  + Başlat düğmesi yalnızca Başlat menüsünü açar, görev çubuğu çıkmaz.
+  + Diskler paneli: bir diske tıkla → klasörler boyuta göre (TreeSize gibi,
+    Everything'den; tam tarama yok). Klasöre tıkla içine gir, "‹ Geri" ile
+    dön; "Explorer'da aç" düğmesi ya da sağ tık. Everything klasör
+    boyutlarını dizinlemiyorsa eşikten büyük dosyalar toplanır (yaklaşık).
+  + Sistem kartı → Windows optimizasyonu: RAM'i boşalt (çalışma kümeleri +
+    bekleme listesi), geçici dosyaları tara → silinecek MB'ı gör → onayla,
+    DNS önbelleği. Oyun açıkken düğmeler pasif. Tarayıcı verisine, oyunlara,
+    Steam'e, hile önleyicilere ve GPU sürücüsüne dokunulmaz. Yalnızca 24
+    saatten eski geçici dosyalar silinir; kullanımdakiler atlanır.
+  + Ses kartı: sağ tık ya da küçük ok → çıkış aygıtı listesi; seçilen aygıt
+    varsayılan olur.
+  + WARP kartı: Cloudflare WARP durumu (yeşil = bağlı), tıkla bağlan/kes.
+    Yalnızca warp-cli kullanılır, WARP penceresi açılmaz.
+  + Saatin altında tam tarih (16.11.2026 gibi).
+  + Arama artık varsayılan olarak Windows araması gibi: uygulamalar, ayarlar
+    ve dosyalar (Windows Search dizini); boşken son dosyalar. Ayarlar'da
+    "Aramada Everything kullan" açılırsa Everything ile aranır.
+  + Gravitone'dan (MIT, Stefano Lupano) büyütme, sıçrama ve görev çubuğu
+    kaldırma yöntemi uyarlandı; ayrıntı ve lisans THIRD-PARTY-NOTICES.md'de.
 
 1.4.1'DE NE DEĞİŞTİ
   + Arama (büyüteç): kurulu Everything ile arka planda dosya/klasör arama.

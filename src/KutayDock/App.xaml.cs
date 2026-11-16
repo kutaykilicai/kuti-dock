@@ -19,19 +19,24 @@ namespace KutayDock
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            // Yardımcı kipler (pencere açmaz): görev çubuğu bekçisi ve yönetici gerektiren temizlik
+            if (e.Args.Length > 0 && e.Args[0] == TaskbarRemover.GuardArg) { Shutdown(TaskbarRemover.RunGuard(e.Args)); return; }
+            if (e.Args.Length > 0 && e.Args[0] == Optimizer.AdminArg) { Shutdown(Optimizer.RunAdmin(e.Args)); return; }
             _single = new Mutex(true, "KutayDock.TekKopya", out bool first);
             if (!first) { Shutdown(); return; }
 
             DispatcherUnhandledException += (_, ex) => { Log(ex.Exception); ex.Handled = true; };
-            AppDomain.CurrentDomain.UnhandledException += (_, ex) => { Log(ex.ExceptionObject as Exception); AppBar.RestoreTaskbar(); };
+            AppDomain.CurrentDomain.UnhandledException += (_, ex) => { Log(ex.ExceptionObject as Exception); AppBar.RestoreTaskbar(); TaskbarRemover.SetEnabled(false); };
 
+            TaskbarRemover.RestoreOrphaned();
             AppBar.ShowAllTaskbars();
             var settings = Settings.Load(SettingsPath);
             if (!File.Exists(SettingsPath)) { try { settings.Save(SettingsPath); } catch (Exception) { } }
             _services = new Services(settings);
             _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify);
             _dock.Show();
-            if (settings.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
+            if (settings.RemoveWindowsTaskbar) TaskbarRemover.SetEnabled(true);
+            else if (settings.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
             CreateTray();
         }
 
@@ -71,11 +76,18 @@ namespace KutayDock
 
         void Apply(Settings s)
         {
-            bool hideChanged = s.AutoHideWindowsTaskbar != _services.Settings.AutoHideWindowsTaskbar;
+            bool hideChanged = s.AutoHideWindowsTaskbar != _services.Settings.AutoHideWindowsTaskbar
+                || s.RemoveWindowsTaskbar != _services.Settings.RemoveWindowsTaskbar;
             try { s.Save(SettingsPath); } catch (Exception ex) { Log(ex); }
             _services.Settings = s;
             _services.InvalidateData();
-            if (hideChanged) AppBar.SetTaskbarAutoHide(s.AutoHideWindowsTaskbar);
+            if (hideChanged)
+            {
+                TaskbarRemover.SetEnabled(false);
+                AppBar.SetTaskbarAutoHide(false);
+                if (s.RemoveWindowsTaskbar) TaskbarRemover.SetEnabled(true);
+                else if (s.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
+            }
             _dock.Build();
         }
 
@@ -83,6 +95,7 @@ namespace KutayDock
         {
             try { _services?.Dispose(); } catch (Exception) { }
             AppBar.RestoreTaskbar();
+            TaskbarRemover.SetEnabled(false);
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
             _dock?.Close();
             Shutdown();
@@ -91,6 +104,7 @@ namespace KutayDock
         protected override void OnExit(ExitEventArgs e)
         {
             AppBar.RestoreTaskbar();
+            TaskbarRemover.SetEnabled(false);
             base.OnExit(e);
         }
 

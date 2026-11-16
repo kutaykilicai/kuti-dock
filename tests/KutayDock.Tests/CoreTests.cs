@@ -276,7 +276,7 @@ public class FloatingDefaultsTests
     public void NewSettingsFloat()
     {
         var s = new Settings().Migrate();
-        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(4, s.Version);
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(5, s.Version);
         Assert.Equal(1, s.Widgets.IndexOf("search"));
     }
 
@@ -380,7 +380,7 @@ public class EverythingIpcTests
     {
         var s = new Settings { Version = 3, Widgets = new() { "start", "apps", "clock" } };
         s.Migrate();
-        Assert.Equal(new[] { "start", "search", "apps", "clock" }, s.Widgets);
+        Assert.Equal(new[] { "start", "search", "apps", "warp", "clock" }, s.Widgets);
         s.Widgets.Remove("search"); s.Migrate();   // kullanıcı kapatırsa geri gelmez
         Assert.DoesNotContain("search", s.Widgets);
     }
@@ -494,8 +494,8 @@ public class MigrationTests
         File.WriteAllText(p, "{\"Style\":\"Siyah\",\"AiSource\":\"ClaudeCode\",\"IcsUrls\":[\"x\"],\"Widgets\":[\"start\",\"apps\",\"ai\",\"media\",\"volume\",\"screentime\",\"calendar\",\"battery\",\"clock\"]}");
         var s = Settings.Load(p);
         Assert.Equal(DockStyle.Siyah, s.Style);
-        Assert.Equal(new[] { "start", "search", "apps", "ai", "volume", "storage", "screenshot", "battery", "clock" }, s.Widgets);
-        Assert.Equal(4, s.Version);
+        Assert.Equal(new[] { "start", "search", "apps", "ai", "volume", "storage", "screenshot", "battery", "warp", "clock" }, s.Widgets);
+        Assert.Equal(5, s.Version);
         // 1.1 dosyası tekrar taşınmaz: kullanıcı Depolama'yı kapattıysa geri gelmez
         s.Widgets.Remove("storage"); s.Save(p);
         Assert.DoesNotContain("storage", Settings.Load(p).Widgets);
@@ -545,5 +545,181 @@ public class SettingsListTests
         var s = new Settings { Widgets = new() { "clock", "apps" } };
         var copy = Settings.Deserialize<Settings>(Settings.Serialize(s))!;
         Assert.Equal(new[] { "clock", "apps" }, copy.Widgets);
+    }
+}
+
+public class V15Tests
+{
+    [Fact]
+    public void MagnifyCosineBump()
+    {
+        Assert.Equal(40.0 / 28, Magnify.Scale(0, 28, 40, 1), 6);
+        Assert.Equal(1, Magnify.Scale(Magnify.Range(28), 28, 40, 1));
+        Assert.Equal(1, Magnify.Scale(5, 28, 40, 0));
+        double mid = Magnify.Scale(Magnify.Range(28) / 2, 28, 40, 1);
+        Assert.Equal(1 + (40.0 / 28 - 1) / 2, mid, 6);
+        Assert.True(Magnify.Scale(10, 28, 40, 1) > Magnify.Scale(20, 28, 40, 1));
+    }
+
+    [Fact]
+    public void ApproachConvergesAndSnaps()
+    {
+        double v = 1;
+        for (int i = 0; i < 200; i++) v = Magnify.Approach(v, 1.4, 1 / 60.0, Magnify.TauGrow);
+        Assert.Equal(1.4, v);
+        Assert.True(Magnify.Approach(1, 2, 0.01, 0.045) < 2);
+    }
+
+    [Fact]
+    public void LaunchBounceIsParabolicAndStopsAfterLanding()
+    {
+        var b = new Bouncer();
+        b.Start(BounceKind.Launch, 0);
+        Assert.Equal(0, b.Offset(0), 6);
+        Assert.Equal(0.5, b.Offset(0.31), 3);          // tepe: periyodun yarısı, yükseklik 0,5
+        b.Stop(0.4);                                    // o anki sıçrama iner, sonra durur
+        Assert.True(b.IsActive);
+        Assert.True(b.Offset(0.5) > 0);
+        Assert.Equal(0, b.Offset(0.7));
+        Assert.False(b.IsActive);
+    }
+
+    [Fact]
+    public void LaunchBounceTimesOut()
+    {
+        var b = new Bouncer();
+        b.Start(BounceKind.Launch, 0);
+        b.Offset(12.5); b.Offset(13.2);
+        Assert.False(b.IsActive);
+    }
+
+    [Fact]
+    public void FolderAggregateGroupsByChild()
+    {
+        var files = new[]
+        {
+            (@"C:\Games\A\bin", "x.pak", 300L), (@"C:\Games\A", "y.pak", 200L), (@"C:\Games\B", "z", 100L),
+            (@"C:\Games", "kok.iso", 50L), (@"C:\Other", "w", 999L), (@"C:\Games\B", "neg", -1L),
+        };
+        var r = FolderSizes.Aggregate(@"C:\Games\", files);
+        Assert.Equal(new[] { "A", "B", "kok.iso" }, r.Select(e => e.Name));
+        Assert.Equal(500, r[0].Bytes); Assert.Equal(2, r[0].Files); Assert.True(r[0].IsFolder);
+        Assert.Equal(@"C:\Games\A", r[0].FullPath);
+        Assert.False(r[2].IsFolder);
+    }
+
+    [Fact]
+    public void FolderQueryAndParent()
+    {
+        Assert.Equal("file: \"C:\\\" size:>1024", FolderSizes.Query(@"C:\", 1024));
+        Assert.Equal(@"C:\", FolderSizes.Parent(@"C:\Users"));
+        Assert.Equal(@"C:\Users", FolderSizes.Parent(@"C:\Users\Kutay\"));
+        Assert.Null(FolderSizes.Parent(@"C:\"));
+    }
+
+    static byte[] List2(params (uint flags, string name, string path, long size)[] items)
+    {
+        var data = new List<byte>();
+        var offs = new List<int>();
+        int header = 20 + items.Length * 8;
+        foreach (var it in items)
+        {
+            offs.Add(header + data.Count);
+            foreach (var t in new[] { it.name, it.path })
+            {
+                data.AddRange(BitConverter.GetBytes((uint)t.Length));
+                data.AddRange(System.Text.Encoding.Unicode.GetBytes(t + "\0"));
+            }
+            data.AddRange(BitConverter.GetBytes(it.size));
+        }
+        var b = new List<byte>();
+        foreach (var v in new uint[] { (uint)items.Length, (uint)items.Length, 0, EverythingIpc.RequestName | EverythingIpc.RequestPath | EverythingIpc.RequestSize, EverythingIpc.SortSizeDescending })
+            b.AddRange(BitConverter.GetBytes(v));
+        for (int i = 0; i < items.Length; i++) { b.AddRange(BitConverter.GetBytes(items[i].flags)); b.AddRange(BitConverter.GetBytes((uint)offs[i])); }
+        b.AddRange(data);
+        return b.ToArray();
+    }
+
+    [Fact]
+    public void ParsesList2WithSizes()
+    {
+        var r = EverythingIpc.ParseList2(List2((1, "Games", @"D:\", 5_000_000_000), (0, "a.iso", @"D:\Games", 123)));
+        Assert.Equal(2, r.Count);
+        Assert.Equal(("Games", @"D:\", 5_000_000_000L, true), r[0]);
+        Assert.Equal(("a.iso", @"D:\Games", 123L, false), r[1]);
+        Assert.Empty(EverythingIpc.ParseList2(new byte[3]));
+        var broken = List2((0, "x", "y", 1)); Array.Resize(ref broken, broken.Length - 10);
+        Assert.Empty(EverythingIpc.ParseList2(broken));
+    }
+
+    [Fact]
+    public void BuildsQuery2Header()
+    {
+        var b = EverythingIpc.BuildQuery2(0x1234, 77, "abc", 500, 0x13, 6);
+        Assert.Equal(0x1234u, BitConverter.ToUInt32(b, 0));
+        Assert.Equal(77u, BitConverter.ToUInt32(b, 4));
+        Assert.Equal(500u, BitConverter.ToUInt32(b, 16));
+        Assert.Equal(0x13u, BitConverter.ToUInt32(b, 20));
+        Assert.Equal(6u, BitConverter.ToUInt32(b, 24));
+        Assert.Equal("abc\0", System.Text.Encoding.Unicode.GetString(b, 28, b.Length - 28));
+    }
+
+    [Fact]
+    public void OptimizeNeverTouchesGamesDriversOrSystem()
+    {
+        Assert.True(OptimizeRules.IsGame("Marvel-Win64-Shipping", null));
+        Assert.True(OptimizeRules.IsGame("game", @"D:\SteamLibrary\steamapps\common\X\game.exe"));
+        Assert.False(OptimizeRules.IsGame("chrome", @"C:\Program Files\Google\Chrome\chrome.exe"));
+        foreach (var p in new[] { "steam", "steamwebhelper", "EasyAntiCheat", "BEService", "vgc", "nvcontainer", "NVDisplay.Container", "amdrsserv", "csrss", "dwm", "audiodg" })
+            Assert.True(OptimizeRules.IsProtected(p, null), p);
+        Assert.False(OptimizeRules.IsProtected("chrome", null));
+        Assert.False(OptimizeRules.IsProtected("Discord", null));
+    }
+
+    [Fact]
+    public void ParsesWarpStatus()
+    {
+        Assert.Equal(WarpState.Connected, Warp.Parse("Status update: Connected\nNetwork: healthy"));
+        Assert.Equal(WarpState.Disconnected, Warp.Parse("Status update: Disconnected\nReason: Manual Disconnection"));
+        Assert.Equal(WarpState.Connecting, Warp.Parse("Status update: Connecting"));
+        Assert.Equal(WarpState.Unknown, Warp.Parse(null));
+        Assert.Equal(WarpState.Unknown, Warp.Parse("Error: daemon not running"));
+        Assert.Equal("Bağlı", Warp.Label(WarpState.Connected));
+    }
+
+    [Fact]
+    public void WindowsLikeSearchRanking()
+    {
+        Assert.Equal(100, WinSearch.Score("Discord", "discord"));
+        Assert.Equal(80, WinSearch.Score("Discord", "dis"));
+        Assert.Equal(60, WinSearch.Score("Visual Studio Code", "stu"));
+        Assert.Equal(40, WinSearch.Score("Notepad", "pad"));
+        Assert.Equal(0, WinSearch.Score("Notepad", "xyz"));
+        var r = WinSearch.Rank(new[] { "Spotify", "Steam", "Ses", "Paint" }, x => x, "s", 3);
+        Assert.Equal(new[] { "Ses", "Steam", "Spotify" }, r);
+        Assert.Contains(WinSearch.Rank(WinSearch.SettingsPages, p => p.Name, "bluetooth", 1), p => p.Uri.StartsWith("ms-settings:"));
+    }
+
+    [Fact]
+    public void IndexSqlIsEscaped()
+    {
+        var sql = WinSearch.IndexSql("a'b%c", 8);
+        Assert.Contains("TOP 8", sql);
+        Assert.Contains("LIKE '%a''bc%'", sql);
+        Assert.DoesNotContain("a'b", sql.Replace("a''b", ""));
+    }
+
+    [Fact]
+    public void V5MigrationAddsWarpAndTaskbarRemoval()
+    {
+        var s = new Settings { Version = 4, AutoHideWindowsTaskbar = true, Widgets = new() { "start", "search", "network", "clock" } };
+        s.Migrate();
+        Assert.Equal(new[] { "start", "search", "network", "warp", "clock" }, s.Widgets);
+        Assert.True(s.RemoveWindowsTaskbar);
+        s.Widgets.Remove("warp"); s.RemoveWindowsTaskbar = false; s.Migrate();
+        Assert.DoesNotContain("warp", s.Widgets); Assert.False(s.RemoveWindowsTaskbar);
+        var f = new Settings().Migrate();
+        Assert.Contains("warp", f.Widgets); Assert.False(f.RemoveWindowsTaskbar);
+        Assert.True(f.Magnification); Assert.True(f.Animations); Assert.False(f.SearchWithEverything);
     }
 }

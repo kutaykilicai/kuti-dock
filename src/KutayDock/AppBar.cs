@@ -161,6 +161,8 @@ namespace KutayDock
 
         static void Poll(object sender, EventArgs e)
         {
+            // Dock'un Başlat düğmesi menüyü açarken görev çubuğu gösterilmez (yalnızca Başlat menüsü)
+            if (TaskbarRemover.Suppressing || TaskbarRemover.Active) return;
             if (!Native.GetCursorPos(out var p)) return;
             var bars = Taskbars();
             bool hover = false;

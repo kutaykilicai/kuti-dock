@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -28,6 +29,7 @@ namespace KutayDock.Tiles
                     CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 12, 14, 12), Child = content, MinWidth = 260,
                 },
             };
+            p.Opened += (_, _) => Anim.PopIn(p.Child, edge);
             return p;
         }
 
@@ -238,7 +240,9 @@ namespace KutayDock.Tiles
                     row.Children.Add(top);
                     row.Children.Add(new Bar { Height = 6, Value = used, Fill = Fill(used), Track = Theme.B("#33FFFFFF"), Margin = new Thickness(0, 4, 0, 0) });
                     var path = d.Name;
-                    row.MouseLeftButtonUp += (_, e) => { _popup.IsOpen = false; Run("explorer.exe", $"\"{path}\""); e.Handled = true; };
+                    row.ToolTip = "Tıkla: klasör boyutları · Sağ tık: Explorer'da aç";
+                    row.MouseLeftButtonUp += (_, e) => { _ = ShowFolder(path); e.Handled = true; };
+                    row.MouseRightButtonUp += (_, e) => { _popup.IsOpen = false; Run("explorer.exe", $"\"{path}\""); e.Handled = true; };
                     p.Children.Add(row);
                 }
                 catch (Exception) { }
@@ -249,6 +253,162 @@ namespace KutayDock.Tiles
             _popup.MinWidth = 300;
             _popup.IsOpen = true;
         }
+
+        EverythingClient _ev;
+        int _seq;
+
+        void SetContent(UIElement c) { if (_popup?.Child is Border b) b.Child = c; }
+
+        /// <summary>
+        /// TreeSize benzeri sade görünüm: klasörün alt klasörleri boyuta göre, çubuklu. Veri Everything'den (IPC, arka planda);
+        /// tam tarama yapılmaz. Everything klasör boyutlarını dizinliyorsa doğrudan, yoksa eşikten büyük dosyalar toplanır (yaklaşık).
+        /// </summary>
+        async System.Threading.Tasks.Task ShowFolder(string path)
+        {
+            int seq = ++_seq;
+            var head = new DockPanel();
+            var back = new Border { Child = Ui.Text("‹ Geri", 12, Theme.Accent, FontWeights.SemiBold), Cursor = Cursors.Hand, Background = Brushes.Transparent, Margin = new Thickness(0, 0, 10, 0) };
+            var parent = FolderSizes.Parent(path);
+            back.MouseLeftButtonUp += (_, e) => { if (parent == null) ShowAllContent(); else _ = ShowFolder(parent); e.Handled = true; };
+            var open = new Border { Child = Ui.Text("Explorer'da aç", 11, Theme.Accent), Cursor = Cursors.Hand, Background = Brushes.Transparent, Margin = new Thickness(10, 0, 0, 0) };
+            open.MouseLeftButtonUp += (_, e) => { _popup.IsOpen = false; Run("explorer.exe", $"\"{path}\""); e.Handled = true; };
+            DockPanel.SetDock(back, Dock.Left); DockPanel.SetDock(open, Dock.Right);
+            head.Children.Add(back); head.Children.Add(open);
+            head.Children.Add(Ui.Text(path, 13, Brushes.White, FontWeights.SemiBold, 250));
+            var status = Ui.Text("Hesaplanıyor…", 11, Theme.B("#99F5F5F7"));
+            status.Margin = new Thickness(0, 6, 0, 0);
+            var list = new StackPanel();
+            var scroll = new ScrollViewer { Content = list, MaxHeight = 380, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 6, 0, 0) };
+            var p = new StackPanel { Width = 340, Children = { head, status, scroll } };
+            SetContent(p);
+
+            if (!EverythingClient.Running) { status.Text = "Everything çalışmıyor (Kutay Dock onu başlatmaz)."; return; }
+            _ev ??= new EverythingClient();
+            var root = path.TrimEnd('\\') + "\\";
+            List<FolderEntry> entries;
+            bool approx = false;
+            // 1) Everything klasör boyutlarını dizinliyorsa doğrudan alt öğeler
+            var direct = await _ev.Sized($"parent:\"{(root.Length <= 3 ? root : root.TrimEnd('\\'))}\"", 500);
+            if (seq != _seq) return;
+            if (direct == null) { status.Text = "Everything yanıt vermedi."; return; }
+            if (direct.Any(d => d.IsFolder && d.Size > 0))
+                entries = direct.Where(d => d.Size > 0).OrderByDescending(d => d.Size).Take(30)
+                    .Select(d => new FolderEntry(d.Name, root + d.Name, d.Size, d.IsFolder, 0)).ToList();
+            else
+            {
+                // 2) Dizinlenmemişse: eşikten büyük dosyaları alt klasörlere topla
+                long min = root.Length <= 3 ? 8L << 20 : 256L << 10;
+                var files = await _ev.Sized(FolderSizes.Query(root, min), 60000);
+                if (seq != _seq) return;
+                if (files == null) { status.Text = "Everything yanıt vermedi."; return; }
+                entries = FolderSizes.Aggregate(root, files.Select(f => (f.Folder, f.Name, f.Size)));
+                // Boyutu eşik altında kalan alt klasörler de görünsün (gezinmek için)
+                foreach (var d in direct.Where(d => d.IsFolder && !entries.Any(e => e.Name.Equals(d.Name, StringComparison.OrdinalIgnoreCase))).Take(40))
+                    entries.Add(new FolderEntry(d.Name, root + d.Name, 0, true, 0));
+                approx = true;
+                status.Text = $"Yaklaşık: {Format.Bytes(min)} üstü dosyalar sayıldı · Everything";
+            }
+            if (!approx) status.Text = "Everything klasör boyutları";
+            if (entries.Count == 0) { status.Text = "Bu klasörde gösterilecek öğe yok."; return; }
+            long max = Math.Max(1, entries.Max(e => e.Bytes));
+            foreach (var e in entries)
+            {
+                var row = new StackPanel { Margin = new Thickness(0, 4, 6, 0), Background = Brushes.Transparent, Cursor = e.IsFolder ? Cursors.Hand : Cursors.Arrow };
+                var top = new DockPanel();
+                var size = Ui.Text(e.Bytes > 0 ? Format.Bytes(e.Bytes) : "—", 11, Theme.B("#99F5F5F7"));
+                DockPanel.SetDock(size, Dock.Right); top.Children.Add(size);
+                top.Children.Add(Ui.Text((e.IsFolder ? "📁 " : "") + e.Name, 12, Brushes.White, null, 250));
+                row.Children.Add(top);
+                row.Children.Add(new Bar { Height = 4, Value = (double)e.Bytes / max, Fill = Theme.Accent, Track = Theme.B("#22FFFFFF"), Margin = new Thickness(0, 3, 0, 0) });
+                var full = e.FullPath; bool folder = e.IsFolder;
+                row.ToolTip = full + (folder ? "\nTıkla: içine gir · Sağ tık: Explorer'da aç" : "\nSağ tık: klasörde göster");
+                if (folder) row.MouseLeftButtonUp += (_, ev) => { _ = ShowFolder(full); ev.Handled = true; };
+                row.MouseRightButtonUp += (_, ev) =>
+                {
+                    _popup.IsOpen = false;
+                    Run("explorer.exe", folder ? $"\"{full}\"" : $"/select,\"{full}\"");
+                    ev.Handled = true;
+                };
+                list.Children.Add(row);
+            }
+        }
+
+        void ShowAllContent() { _seq++; ShowAll(); }
+    }
+
+    /// <summary>
+    /// Cloudflare One Client (WARP): durum + tek tıkla bağlan/kes. Yalnızca warp-cli (pencere açmadan, CreateNoWindow);
+    /// uygulama penceresi açılmaz, kullanım koşulları kendiliğinden kabul edilmez.
+    /// </summary>
+    internal sealed class WarpTile : Tile
+    {
+        public override string Id => "warp";
+        static readonly string Cli = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Cloudflare", "Cloudflare WARP", "warp-cli.exe");
+        readonly TextBlock _state; readonly System.Windows.Shapes.Ellipse _dot;
+        WarpState _now = WarpState.Unknown; DateTime _next; bool _busy;
+
+        public WarpTile(Services s, Theme t) : base(s, t)
+        {
+            _dot = new System.Windows.Shapes.Ellipse { Width = 8 * K, Height = 8 * K, Fill = t.FgDim, Margin = new Thickness(0, 0, 6 * K, 0), VerticalAlignment = VerticalAlignment.Center };
+            _state = Txt("", 10, true);
+            Child = Row(_dot, Col(Txt("WARP", 11, w: FontWeights.SemiBold), _state));
+            OnClick(Toggle);
+            Ui.PressEffect(this);
+            Refresh();
+        }
+
+        public override void Refresh()
+        {
+            if (_busy || DateTime.Now < _next) return;
+            _next = DateTime.Now.AddSeconds(10);
+            _ = Poll();
+        }
+
+        async System.Threading.Tasks.Task Poll()
+        {
+            _busy = true;
+            var st = File.Exists(Cli) ? Warp.Parse(await RunCli("status")) : WarpState.NotInstalled;
+            _busy = false;
+            Show(st);
+        }
+
+        void Show(WarpState st)
+        {
+            _now = st;
+            _state.Text = Warp.Label(st);
+            _dot.Fill = st switch { WarpState.Connected => Theme.Green, WarpState.Connecting => Theme.Orange, _ => T.FgDim };
+            ToolTip = st == WarpState.NotInstalled ? "Cloudflare WARP kurulu değil" : $"Cloudflare WARP: {Warp.Label(st)}. Tıkla: " + (st == WarpState.Connected ? "bağlantıyı kes" : "bağlan");
+        }
+
+        async void Toggle()
+        {
+            if (_busy || _now == WarpState.NotInstalled) return;
+            _busy = true;
+            bool connect = _now != WarpState.Connected;
+            Show(WarpState.Connecting);
+            if (!connect) _state.Text = "Kesiliyor…";
+            await RunCli(connect ? "connect" : "disconnect");
+            await System.Threading.Tasks.Task.Delay(1500);
+            _busy = false; _next = DateTime.MinValue;
+            await Poll();
+        }
+
+        static System.Threading.Tasks.Task<string> RunCli(string args) => System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                using var p = Process.Start(new ProcessStartInfo(Cli, args)
+                {
+                    UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
+                    RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
+                });
+                p.StandardInput.Close(); // soru sorarsa (ör. kullanım koşulları) beklemeden çıksın; kabul edilmez
+                var o = p.StandardOutput.ReadToEndAsync();
+                if (!p.WaitForExit(8000)) { try { p.Kill(); } catch (Exception) { } return null; }
+                return o.Result;
+            }
+            catch (Exception) { return null; }
+        });
     }
 
     /// <summary>Ekran görüntüsü: ShareX'in komut satırı eylemleri. Sol tık bölge, sağ tık seçenekler.</summary>

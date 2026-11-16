@@ -55,6 +55,64 @@ public static class EverythingIpc
         return list;
     }
 
+    // ---- QUERY2 (boyut ve sıralama) ----
+    public const int CopyDataQuery2W = 18;                 // EVERYTHING_IPC_COPYDATA_QUERY2W
+    public const uint RequestName = 0x1, RequestPath = 0x2, RequestSize = 0x10;
+    public const uint SortSizeDescending = 6;
+
+    /// <summary>EVERYTHING_IPC_QUERY2: 7 DWORD (yanıt penceresi, kimlik, bayraklar, ofset, en çok, istenen alanlar, sıralama) + UTF-16 metin + 0.</summary>
+    public static byte[] BuildQuery2(uint replyHwnd, uint replyId, string search, int maxResults, uint request, uint sort)
+    {
+        var text = Encoding.Unicode.GetBytes(search + "\0");
+        var b = new byte[28 + text.Length];
+        BitConverter.GetBytes(replyHwnd).CopyTo(b, 0);
+        BitConverter.GetBytes(replyId).CopyTo(b, 4);
+        BitConverter.GetBytes((uint)maxResults).CopyTo(b, 16);
+        BitConverter.GetBytes(request).CopyTo(b, 20);
+        BitConverter.GetBytes(sort).CopyTo(b, 24);
+        text.CopyTo(b, 28);
+        return b;
+    }
+
+    /// <summary>
+    /// EVERYTHING_IPC_LIST2: 5 DWORD başlık (toplam, dönen, ofset, istenen alanlar, sıralama), öğe başına 2 DWORD
+    /// (bayrak, veri ofseti). Veri, istenen alanların sırasıyla: metin = DWORD uzunluk + (uzunluk+1) UTF-16; boyut = 8 bayt.
+    /// (Kasa'daki Everything 1.4.1.1032 ile doğrulandı.)
+    /// </summary>
+    public static List<(string Name, string Folder, long Size, bool IsFolder)> ParseList2(byte[] d)
+    {
+        var list = new List<(string, string, long, bool)>();
+        if (d.Length < 20) return list;
+        uint n = BitConverter.ToUInt32(d, 4), req = BitConverter.ToUInt32(d, 12);
+        for (uint i = 0; i < n; i++)
+        {
+            int at = 20 + (int)i * 8;
+            if (at + 8 > d.Length) break;
+            uint flags = BitConverter.ToUInt32(d, at);
+            int p = (int)BitConverter.ToUInt32(d, at + 4);
+            string name = "", folder = ""; long size = -1;
+            try
+            {
+                if ((req & RequestName) != 0) name = Text(d, ref p);
+                if ((req & RequestPath) != 0) folder = Text(d, ref p);
+                if ((req & RequestSize) != 0) { size = BitConverter.ToInt64(d, p); p += 8; }
+            }
+            catch (ArgumentException) { continue; }
+            list.Add((name, folder, size, (flags & (ItemFolder | ItemDrive)) != 0));
+        }
+        return list;
+    }
+
+    static string Text(byte[] d, ref int p)
+    {
+        if (p < 0 || p + 4 > d.Length) throw new ArgumentException("ofset");
+        int len = (int)BitConverter.ToUInt32(d, p);
+        if (len < 0 || p + 4 + len * 2 > d.Length) throw new ArgumentException("uzunluk");
+        var s = Encoding.Unicode.GetString(d, p + 4, len * 2);
+        p += 4 + (len + 1) * 2;
+        return s;
+    }
+
     static string? Str(byte[] d, uint offset)
     {
         if (offset >= d.Length) return null;

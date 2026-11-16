@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,7 +26,7 @@ namespace KutayDock.Tiles
 
         readonly HwndSource _sink;   // görünmez, yalnızca ileti alan pencere (HWND_MESSAGE)
         uint _id = 1000;
-        public event Action<List<SearchHit>> Results;
+        readonly Dictionary<uint, TaskCompletionSource<byte[]>> _waiting = new();
 
         public EverythingClient()
         {
@@ -34,36 +36,63 @@ namespace KutayDock.Tiles
 
         public static bool Running => FindWindow(EverythingIpc.WindowClass, null) != IntPtr.Zero;
 
-        /// <summary>Sorguyu gönderir; sonuç Results olayıyla gelir. Everything yoksa false.</summary>
-        public bool Query(string text, int max = 20)
+        /// <summary>Basit arama (ad + klasör). Everything yoksa null; yalnızca son sorgunun yanıtı döner.</summary>
+        public async Task<List<SearchHit>> Search(string text, int max = 20)
+        {
+            var b = await Send(EverythingIpc.CopyDataQueryW, id => EverythingIpc.BuildQuery((uint)_sink.Handle.ToInt64(), id, text, max), latestOnly: true);
+            return b == null ? null : EverythingIpc.ParseList(b);
+        }
+
+        /// <summary>Boyutlu sorgu (QUERY2): ad, klasör, boyut; boyuta göre azalan.</summary>
+        public async Task<List<(string Name, string Folder, long Size, bool IsFolder)>> Sized(string text, int max)
+        {
+            var b = await Send(EverythingIpc.CopyDataQuery2W, id => EverythingIpc.BuildQuery2((uint)_sink.Handle.ToInt64(), id, text, max,
+                EverythingIpc.RequestName | EverythingIpc.RequestPath | EverythingIpc.RequestSize, EverythingIpc.SortSizeDescending), latestOnly: false);
+            return b == null ? null : EverythingIpc.ParseList2(b);
+        }
+
+        Task<byte[]> Send(int type, Func<uint, byte[]> build, bool latestOnly)
         {
             var ev = FindWindow(EverythingIpc.WindowClass, null);
-            if (ev == IntPtr.Zero) return false;
-            var data = EverythingIpc.BuildQuery((uint)_sink.Handle.ToInt64(), ++_id, text, max);
+            if (ev == IntPtr.Zero) return Task.FromResult<byte[]>(null);
+            uint id = ++_id;
+            if (latestOnly) { foreach (var w in _waiting.Values) w.TrySetResult(null); _waiting.Clear(); }
+            var tcs = new TaskCompletionSource<byte[]>();
+            _waiting[id] = tcs;
+            var data = build(id);
             var p = Marshal.AllocHGlobal(data.Length);
             try
             {
                 Marshal.Copy(data, 0, p, data.Length);
-                var cds = new COPYDATASTRUCT { dwData = new IntPtr(EverythingIpc.CopyDataQueryW), cbData = data.Length, lpData = p };
-                return SendMessage(ev, WM_COPYDATA, _sink.Handle, ref cds) != IntPtr.Zero;
+                var cds = new COPYDATASTRUCT { dwData = new IntPtr(type), cbData = data.Length, lpData = p };
+                if (SendMessage(ev, WM_COPYDATA, _sink.Handle, ref cds) == IntPtr.Zero) { _waiting.Remove(id); return Task.FromResult<byte[]>(null); }
             }
             finally { Marshal.FreeHGlobal(p); }
+            // Yanıt gelmezse 10 sn sonra vazgeç
+            _ = Task.Delay(10_000).ContinueWith(_ => tcs.TrySetResult(null));
+            return tcs.Task;
         }
 
         IntPtr Hook(IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled)
         {
             if (msg != WM_COPYDATA) return IntPtr.Zero;
             var cds = Marshal.PtrToStructure<COPYDATASTRUCT>(l);
-            if ((uint)cds.dwData.ToInt64() != _id) { handled = true; return new IntPtr(1); } // eski sorgunun yanıtı
-            var b = new byte[cds.cbData];
-            Marshal.Copy(cds.lpData, b, 0, cds.cbData);
-            var hits = EverythingIpc.ParseList(b);
+            uint id = (uint)cds.dwData.ToInt64();
             handled = true;
-            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() => Results?.Invoke(hits)));
+            if (_waiting.Remove(id, out var tcs))
+            {
+                var b = new byte[cds.cbData];
+                Marshal.Copy(cds.lpData, b, 0, cds.cbData);
+                tcs.TrySetResult(b);
+            }
             return new IntPtr(1);
         }
 
-        public void Dispose() => _sink.Dispose();
+        public void Dispose()
+        {
+            foreach (var w in _waiting.Values) w.TrySetResult(null);
+            _sink.Dispose();
+        }
     }
 
     /// <summary>Dock'taki büyüteç; tıklayınca arama paneli.</summary>
@@ -74,22 +103,26 @@ namespace KutayDock.Tiles
         {
             Width = 42 * K; Height = 42 * K; CornerRadius = new CornerRadius(10 * K); Background = Brushes.Transparent;
             Child = Ui.Glyph("M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z", t.Fg, 20 * K);
-            ToolTip = "Ara (Everything)";
+            ToolTip = "Ara";
             MouseEnter += (_, _) => Background = t.TileHover; MouseLeave += (_, _) => Background = Brushes.Transparent;
-            OnClick(() => SearchPanel.Toggle(this, S.Settings.Edge));
+            OnClick(() => SearchPanel.Toggle(this, S.Settings.Edge, S.Settings.SearchWithEverything));
             Ui.PressEffect(this);
         }
         public override void Refresh() { }
     }
 
-    /// <summary>Windows arama kutusu gibi küçük koyu panel: yazdıkça ilk 20 sonuç (simge + ad + klasör).</summary>
+    /// <summary>
+    /// Windows arama kutusu gibi küçük koyu panel. Varsayılan: Windows araması gibi uygulamalar, ayarlar ve dosyalar
+    /// (Windows Search dizini; boşken son dosyalar). Ayarlarda "Everything ile ara" açıksa Everything kullanılır.
+    /// Hiçbir dış pencere açılmaz; yalnızca seçilen sonuç açılır.
+    /// </summary>
     internal sealed class SearchPanel : Window
     {
         static SearchPanel _current;
-        public static void Toggle(FrameworkElement anchor, DockEdge edge)
+        public static void Toggle(FrameworkElement anchor, DockEdge edge, bool everything)
         {
             if (_current != null) { _current.Close(); return; }
-            _current = new SearchPanel(anchor, edge);
+            _current = new SearchPanel(anchor, edge, everything);
             _current.Show();
             _current.Activate();
             Native.Activate(new WindowInteropHelper(_current).Handle); // dock odak almadığı için klavyeyi panele ver
@@ -97,74 +130,105 @@ namespace KutayDock.Tiles
 
         readonly FrameworkElement _anchor;
         readonly DockEdge _edge;
+        readonly bool _everything;
         readonly TextBox _box;
         readonly ListBox _list;
         readonly TextBlock _status;
-        readonly EverythingClient _ev = new();
+        readonly EverythingClient _ev;
         readonly DispatcherTimer _typing = new() { Interval = TimeSpan.FromMilliseconds(120) };
+        int _seq;
         bool _closing;
 
-        SearchPanel(FrameworkElement anchor, DockEdge edge)
+        SearchPanel(FrameworkElement anchor, DockEdge edge, bool everything)
         {
-            _anchor = anchor; _edge = edge;
+            _anchor = anchor; _edge = edge; _everything = everything;
+            if (everything) _ev = new EverythingClient();
             WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
-            ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Topmost = true; Width = 520; SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Topmost = true; Width = 440; SizeToContent = SizeToContent.Height;
             FontFamily = Theme.Font; Left = -32000; Top = -32000;
 
             _box = new TextBox
             {
-                FontSize = 15, Foreground = Brushes.White, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
-                CaretBrush = Brushes.White, Margin = new Thickness(4, 2, 4, 8), VerticalContentAlignment = VerticalAlignment.Center,
+                FontSize = 14, Foreground = Brushes.White, Background = Theme.B("#22FFFFFF"), BorderThickness = new Thickness(0),
+                CaretBrush = Brushes.White, Padding = new Thickness(10, 7, 10, 7), Margin = new Thickness(0, 0, 0, 6), VerticalContentAlignment = VerticalAlignment.Center,
             };
-            _status = new TextBlock { Foreground = Theme.B("#9A9AA0"), FontSize = 12, Margin = new Thickness(6, 2, 6, 4), Text = "Yaz: Everything ile ara · Enter aç · Ctrl+Enter klasörde göster · Esc kapat" };
+            _status = new TextBlock { Foreground = Theme.B("#9A9AA0"), FontSize = 11, Margin = new Thickness(4, 0, 4, 4) };
             _list = new ListBox
             {
-                Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Brushes.White, MaxHeight = 460,
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Brushes.White, MaxHeight = 400,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
             };
             ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
-            _list.MouseLeftButtonUp += (_, e) => { if (_list.SelectedItem is ListBoxItem { Tag: SearchHit h }) Open(h, Keyboard.Modifiers.HasFlag(ModifierKeys.Control)); };
+            _list.MouseLeftButtonUp += (_, e) => { if (_list.SelectedItem is ListBoxItem { Tag: QuickHit h }) Open(h, Keyboard.Modifiers.HasFlag(ModifierKeys.Control)); };
 
             var stack = new StackPanel();
             stack.Children.Add(_box); stack.Children.Add(_status); stack.Children.Add(_list);
             Content = new Border
             {
                 Background = Theme.B("#F21C1C1F"), BorderBrush = Theme.B("#33FFFFFF"), BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12), Padding = new Thickness(10), Child = stack,
+                CornerRadius = new CornerRadius(12), Padding = new Thickness(8), Child = stack,
             };
 
             _box.TextChanged += (_, _) => { _typing.Stop(); _typing.Start(); };
             _typing.Tick += (_, _) => { _typing.Stop(); Search(); };
-            _ev.Results += Show;
             PreviewKeyDown += Keys;
             Deactivated += (_, _) => { if (!_closing) Close(); };
-            ContentRendered += (_, _) => { Place(); _box.Focus(); };
+            ContentRendered += (_, _) => { Place(); _box.Focus(); Anim.PopIn(this, _edge); };
             SizeChanged += (_, _) => Place();
-            if (!EverythingClient.Running) _status.Text = "Everything çalışmıyor (Kutay Dock onu başlatmaz).";
+            if (everything && !EverythingClient.Running) _status.Text = "Everything çalışmıyor (Kutay Dock onu başlatmaz).";
+            Search();
         }
 
-        void Search()
+        async void Search()
         {
             var q = _box.Text.Trim();
-            if (q.Length == 0) { _list.Items.Clear(); return; }
-            if (!_ev.Query(q, 20)) { _list.Items.Clear(); _status.Text = "Everything çalışmıyor (Kutay Dock onu başlatmaz)."; }
+            int seq = ++_seq;
+            if (_everything)
+            {
+                if (q.Length == 0) { _list.Items.Clear(); _status.Text = "Everything ile ara · Enter aç · Ctrl+Enter klasörde göster · Esc kapat"; return; }
+                var hits = await _ev.Search(q, 20);
+                if (seq != _seq) return;
+                if (hits == null) { _list.Items.Clear(); _status.Text = "Everything çalışmıyor (Kutay Dock onu başlatmaz)."; return; }
+                Show(hits.Select(h => new QuickHit(HitKind.File, h.Name, h.Folder, h.FullPath)).ToList(), null);
+                return;
+            }
+            if (q.Length == 0) { Show(WindowsSearch.Recent(8), "Son dosyalar"); return; }
+            var quick = WindowsSearch.Apps(q, 6).Concat(WindowsSearch.Settings(q, 4)).ToList();
+            Show(quick, null);
+            var files = await WindowsSearch.FilesAsync(q, 8);
+            if (seq != _seq || files.Count == 0) return;
+            Show(quick.Concat(files).ToList(), null);
         }
 
-        void Show(List<SearchHit> hits)
+        void Show(List<QuickHit> hits, string header)
         {
+            var keep = _list.SelectedIndex;
             _list.Items.Clear();
-            _status.Text = hits.Count == 0 ? "Sonuç yok" : $"{hits.Count} sonuç · Enter aç · Ctrl+Enter klasörde göster";
+            _status.Text = header ?? (hits.Count == 0 ? "Sonuç yok" : "Enter aç · Ctrl+Enter klasörde göster · Esc kapat");
+            HitKind? last = null;
             foreach (var h in hits)
             {
-                var icon = new Image { Width = 20, Height = 20, Margin = new Thickness(0, 0, 10, 0), Source = ShellIcons.Get(h.FullPath, 32) ?? ShellIcons.Generic, VerticalAlignment = VerticalAlignment.Center };
+                if (!_everything && header == null && h.Kind != last)
+                {
+                    _list.Items.Add(new ListBoxItem { Content = new TextBlock { Text = h.Kind switch { HitKind.App => "Uygulamalar", HitKind.Setting => "Ayarlar", _ => "Dosyalar" }, Foreground = Theme.B("#9A9AA0"), FontSize = 11, Margin = new Thickness(2, 6, 0, 0) }, IsEnabled = false, Focusable = false });
+                    last = h.Kind;
+                }
+                var src = h.Kind == HitKind.Setting ? null : ShellIcons.Get(h.Target, 32);
+                var icon = new Image { Width = 20, Height = 20, Margin = new Thickness(0, 0, 10, 0), Source = src ?? ShellIcons.Generic, VerticalAlignment = VerticalAlignment.Center };
                 var text = new StackPanel();
                 text.Children.Add(new TextBlock { Text = h.Name, Foreground = Brushes.White, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis });
-                text.Children.Add(new TextBlock { Text = h.Folder, Foreground = Theme.B("#9A9AA0"), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
+                if (h.Detail.Length > 0) text.Children.Add(new TextBlock { Text = h.Detail, Foreground = Theme.B("#9A9AA0"), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
                 var row = new DockPanel { Margin = new Thickness(2, 3, 2, 3) };
                 DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon); row.Children.Add(text);
-                _list.Items.Add(new ListBoxItem { Content = row, Tag = h, ToolTip = h.FullPath, Cursor = Cursors.Hand });
+                _list.Items.Add(new ListBoxItem { Content = row, Tag = h, ToolTip = h.Target, Cursor = Cursors.Hand });
             }
-            if (_list.Items.Count > 0) _list.SelectedIndex = 0;
+            Select(keep >= 0 && keep < _list.Items.Count ? keep : 0, 1);
+        }
+
+        void Select(int i, int dir)
+        {
+            while (i >= 0 && i < _list.Items.Count && _list.Items[i] is ListBoxItem { IsEnabled: false }) i += dir;
+            if (i >= 0 && i < _list.Items.Count) { _list.SelectedIndex = i; _list.ScrollIntoView(_list.SelectedItem); }
         }
 
         void Keys(object sender, KeyEventArgs e)
@@ -172,28 +236,21 @@ namespace KutayDock.Tiles
             switch (e.Key)
             {
                 case Key.Escape: Close(); e.Handled = true; break;
-                case Key.Down: Move(1); e.Handled = true; break;
-                case Key.Up: Move(-1); e.Handled = true; break;
+                case Key.Down: Select(_list.SelectedIndex + 1, 1); e.Handled = true; break;
+                case Key.Up: Select(_list.SelectedIndex - 1, -1); e.Handled = true; break;
                 case Key.Enter:
-                    if (_list.SelectedItem is ListBoxItem { Tag: SearchHit h }) Open(h, Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+                    if (_list.SelectedItem is ListBoxItem { Tag: QuickHit h }) Open(h, Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
                     e.Handled = true; break;
             }
         }
 
-        void Move(int d)
-        {
-            if (_list.Items.Count == 0) return;
-            _list.SelectedIndex = Math.Clamp(_list.SelectedIndex + d, 0, _list.Items.Count - 1);
-            _list.ScrollIntoView(_list.SelectedItem);
-        }
-
-        void Open(SearchHit h, bool inFolder)
+        void Open(QuickHit h, bool inFolder)
         {
             try
             {
-                var psi = inFolder
-                    ? new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{h.FullPath}\"")
-                    : new System.Diagnostics.ProcessStartInfo(h.FullPath);
+                var psi = inFolder && h.Kind == HitKind.File
+                    ? new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{h.Target}\"")
+                    : new System.Diagnostics.ProcessStartInfo(h.Target);
                 psi.UseShellExecute = true;
                 System.Diagnostics.Process.Start(psi);
             }
@@ -216,9 +273,81 @@ namespace KutayDock.Tiles
 
         protected override void OnClosed(EventArgs e)
         {
-            _typing.Stop(); _ev.Dispose();
+            _typing.Stop(); _ev?.Dispose();
             if (_current == this) _current = null;
             base.OnClosed(e);
+        }
+    }
+
+    /// <summary>Windows araması kaynakları: Uygulamalar klasörü (shell:AppsFolder), Ayarlar sayfaları, Windows Search dizini, son dosyalar.</summary>
+    internal static class WindowsSearch
+    {
+        static List<(string Name, string Target)> _apps; static DateTime _appsAt;
+
+        /// <summary>Başlat menüsündeki tüm uygulamalar (masaüstü + Store), 2 dakika önbellekli.</summary>
+        static List<(string Name, string Target)> AllApps()
+        {
+            if (_apps != null && DateTime.Now - _appsAt < TimeSpan.FromMinutes(2)) return _apps;
+            var list = new List<(string, string)>();
+            try
+            {
+                dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
+                dynamic folder = shell.NameSpace("shell:::{4234d49b-0245-4df3-b780-3893943456e1}");
+                foreach (dynamic item in folder.Items())
+                {
+                    string name = item.Name, path = item.Path;
+                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(path)) list.Add((name, @"shell:AppsFolder\" + path));
+                }
+            }
+            catch (Exception) { }
+            _appsAt = DateTime.Now;
+            return _apps = list;
+        }
+
+        public static IEnumerable<QuickHit> Apps(string q, int take) =>
+            WinSearch.Rank(AllApps(), a => a.Name, q, take).Select(a => new QuickHit(HitKind.App, a.Name, "Uygulama", a.Target));
+
+        public static IEnumerable<QuickHit> Settings(string q, int take) =>
+            WinSearch.Rank(WinSearch.SettingsPages, p => p.Name, q, take).Select(p => new QuickHit(HitKind.Setting, p.Name, "Ayarlar", p.Uri));
+
+        /// <summary>Windows Search dizininden dosya adları (OLE DB, Search.CollatorDSO). Dizin hizmeti yoksa boş.</summary>
+        public static Task<List<QuickHit>> FilesAsync(string q, int take) => Task.Run(() =>
+        {
+            var list = new List<QuickHit>();
+            try
+            {
+                using var c = new System.Data.OleDb.OleDbConnection("Provider=Search.CollatorDSO;Extended Properties='Application=Windows';");
+                c.Open();
+                using var cmd = new System.Data.OleDb.OleDbCommand(WinSearch.IndexSql(q, take), c);
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var path = r.IsDBNull(0) ? null : r.GetValue(0) as string;
+                    if (string.IsNullOrEmpty(path)) continue;
+                    list.Add(new QuickHit(HitKind.File, System.IO.Path.GetFileName(path), System.IO.Path.GetDirectoryName(path) ?? "", path));
+                }
+            }
+            catch (Exception) { }
+            return list;
+        });
+
+        /// <summary>Son kullanılan dosyalar (Windows'un "Son öğeler" kısayolları).</summary>
+        public static List<QuickHit> Recent(int take)
+        {
+            var list = new List<QuickHit>();
+            try
+            {
+                var dir = Environment.GetFolderPath(Environment.SpecialFolder.Recent);
+                foreach (var lnk in new System.IO.DirectoryInfo(dir).GetFiles("*.lnk").OrderByDescending(f => f.LastWriteTime))
+                {
+                    var t = ShellIcons.LinkTarget(lnk.FullName);
+                    if (t == null || !System.IO.File.Exists(t)) continue;
+                    list.Add(new QuickHit(HitKind.File, System.IO.Path.GetFileName(t), System.IO.Path.GetDirectoryName(t) ?? "", t));
+                    if (list.Count >= take) break;
+                }
+            }
+            catch (Exception) { }
+            return list;
         }
     }
 }

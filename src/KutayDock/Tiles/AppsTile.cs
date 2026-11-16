@@ -23,6 +23,13 @@ namespace KutayDock.Tiles
         readonly Func<IntPtr> _self;
         string _signature = "";
 
+        // macOS büyütmesi ve açılış sıçraması (Gravitone'dan uyarlandı, MIT; bkz. Core/Motion.cs)
+        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public string Key; public double Cur = 1; }
+        readonly List<Slot> _slots = new();
+        readonly Dictionary<string, Bouncer> _bounce = new();
+        readonly Stopwatch _clock = Stopwatch.StartNew();
+        double _last; bool _looping;
+
         sealed class AppItem
         {
             public string Key, Name, Launch, IconPath; public bool Pinned;
@@ -37,6 +44,46 @@ namespace KutayDock.Tiles
                 _panel.Orientation = Orientation.Vertical; _panel.HorizontalAlignment = HorizontalAlignment.Center;
                 Height = double.NaN; Width = 50 * K;
             }
+            MouseMove += (_, _) => Loop(true);
+            MouseLeave += (_, _) => Loop(true);
+        }
+
+        void Loop(bool on)
+        {
+            if (on == _looping) return;
+            _looping = on;
+            if (on) { _last = _clock.Elapsed.TotalSeconds; CompositionTarget.Rendering += Frame; }
+            else CompositionTarget.Rendering -= Frame;
+        }
+
+        /// <summary>Her karede: imlece uzaklığa göre kosinüs büyütmesi (yumuşak yaklaşma) ve sıçrama yüksekliği.</summary>
+        void Frame(object sender, EventArgs e)
+        {
+            double now = _clock.Elapsed.TotalSeconds, dt = Math.Clamp(now - _last, 0, 0.1); _last = now;
+            bool vertical = DockLayout.Vertical(S.Settings.Edge);
+            var edge = S.Settings.Edge;
+            double icon = 28 * K, max = 40 * K;
+            bool over = IsMouseOver && S.Settings.Magnification;
+            var m = Mouse.GetPosition(_panel);
+            bool busy = over;
+            foreach (var sl in _slots)
+            {
+                if (!sl.Outer.IsLoaded) continue;
+                double target = 1;
+                if (over)
+                {
+                    var c = sl.Outer.TranslatePoint(new Point(sl.Outer.ActualWidth / 2, sl.Outer.ActualHeight / 2), _panel); // yerleşim konumu: büyütmeden etkilenmez
+                    target = Magnify.Scale(vertical ? m.Y - c.Y : m.X - c.X, icon, max, 1);
+                }
+                sl.Cur = Magnify.Approach(sl.Cur, target, dt, target > sl.Cur ? Magnify.TauGrow : Magnify.TauShrink);
+                sl.Scale.ScaleX = sl.Scale.ScaleY = sl.Cur;
+                if (sl.Cur != 1) busy = true;
+                double lift = 0;
+                if (_bounce.TryGetValue(sl.Key, out var b) && b.IsActive) { lift = b.Offset(now) * 18 * K; busy = true; } // dock içine sığacak kadar
+                sl.Lift.X = edge == DockEdge.Sol ? lift : edge == DockEdge.Sag ? -lift : 0;
+                sl.Lift.Y = edge == DockEdge.Alt ? -lift : edge == DockEdge.Ust ? lift : 0;
+            }
+            if (!busy) Loop(false);
         }
 
         static string PinnedDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -91,13 +138,17 @@ namespace KutayDock.Tiles
                 }
                 it.Windows.Add(h);
             }
+            // Açılan uygulama penceresini gösterince sıçrama biter
+            foreach (var it in items)
+                if (it.Windows.Count > 0 && _bounce.TryGetValue(it.Key, out var b) && b.IsActive) b.Stop(_clock.Elapsed.TotalSeconds);
             // Görünüm yalnızca liste değişince yeniden kurulur.
             var fg = Native.GetForegroundWindow();
             var sig = string.Join("|", items.Select(i => i.Key + ":" + i.Windows.Count + (i.Windows.Contains(fg) ? "*" : "")));
             if (sig == _signature) { UpdateHandles(items); return; }
             _signature = sig;
-            _panel.Children.Clear();
+            _panel.Children.Clear(); _slots.Clear();
             foreach (var it in items) _panel.Children.Add(MakeButton(it, it.Windows.Contains(fg)));
+            if (_bounce.Values.Any(b => b.IsActive)) Loop(true);
         }
 
         void UpdateHandles(List<AppItem> items)
@@ -112,11 +163,11 @@ namespace KutayDock.Tiles
             var img = new Image { Width = 28 * K, Height = 28 * K, Source = ShellIcons.Get(item.IconPath) ?? ShellIcons.Generic, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
             UIElement icon = img;
-            var scale = new ScaleTransform(1, 1);
+            var scale = new ScaleTransform(1, 1); var lift = new TranslateTransform();
             FrameworkElement outer = null;
             var edge = S.Settings.Edge;
             var (ox, oy) = DockLayout.ZoomOrigin(edge); // büyüme ekranın içine doğru
-            var iconHost = new Border { Child = icon, RenderTransform = scale, RenderTransformOrigin = new Point(ox, oy) };
+            var iconHost = new Border { Child = icon, RenderTransform = new TransformGroup { Children = { scale, lift } }, RenderTransformOrigin = new Point(ox, oy) };
             var dot = new Border
             {
                 Width = (active ? 10 : 4) * K, Height = 4 * K, CornerRadius = new CornerRadius(2 * K), Background = Theme.Accent,
@@ -149,19 +200,13 @@ namespace KutayDock.Tiles
                     Margin = DockLayout.Vertical(edge) ? new Thickness(0, 2 * K, 0, 2 * K) : new Thickness(2 * K, 0, 2 * K, 0),
                 };
             }
-            // Üzerine gelince büyüme (macOS dock hissi, kart sınırları içinde)
-            void Zoom(double v)
-            {
-                var a = new DoubleAnimation(v, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-                scale.BeginAnimation(ScaleTransform.ScaleXProperty, a); scale.BeginAnimation(ScaleTransform.ScaleYProperty, a);
-            }
+            _slots.Add(new Slot { Outer = outer, Scale = scale, Lift = lift, Key = item.Key });
             // Windows 11 gibi: üzerinde biraz bekleyince açık pencerelerin canlı önizlemesi
             var hover = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
             hover.Tick += (_, _) => { hover.Stop(); if (btn.IsMouseOver) Preview((AppItem)outer.Tag, btn); };
-            btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; Zoom(1.22); hover.Start(); };
-            btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; Zoom(1.0); hover.Stop(); };
-            btn.PreviewMouseLeftButtonDown += (_, _) => Zoom(1.05);
-            btn.MouseLeftButtonUp += (_, e) => { Zoom(1.22); Click((AppItem)outer.Tag, btn); e.Handled = true; };
+            btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; hover.Start(); };
+            btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; hover.Stop(); };
+            btn.MouseLeftButtonUp += (_, e) => { Click((AppItem)outer.Tag, btn); e.Handled = true; };
             btn.MouseRightButtonUp += (_, e) => { WindowPreview.CloseCurrent(); Menu((AppItem)outer.Tag, btn); e.Handled = true; };
             return outer;
         }
@@ -184,9 +229,15 @@ namespace KutayDock.Tiles
             WindowPreview.Open(it.Key, it.Windows, img(it) ?? ShellIcons.Generic, anchor, S.Settings.Edge);
         }
 
-        static void Launch(AppItem it)
+        void Launch(AppItem it)
         {
             if (it.Launch == null) return;
+            if (it.Windows.Count == 0 && S.Settings.Animations)
+            {
+                if (!_bounce.TryGetValue(it.Key, out var b)) _bounce[it.Key] = b = new Bouncer();
+                b.Start(BounceKind.Launch, _clock.Elapsed.TotalSeconds);
+                Loop(true);
+            }
             try { Process.Start(new ProcessStartInfo(it.Launch) { UseShellExecute = true }); } catch (Exception) { }
         }
 

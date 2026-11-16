@@ -26,7 +26,7 @@ namespace KutayDock
         Theme _theme;
         IntPtr _hwnd;
         AppBar _appBar;
-        bool _hiddenForFullscreen, _userHidden;
+        bool _hiddenForFullscreen, _userHidden, _hiding;
         // Tam ekran 250 ms'de bir yoklanır: video/oyun ≈0,5 sn'de gizler (2 gözlem), dock 2 sn sonra geri gelir (8 gözlem).
         readonly DispatcherTimer _fsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
         readonly Debounce _fullscreen = new(2, 8);
@@ -76,6 +76,7 @@ namespace KutayDock
             var set = _s.Settings;
             _theme = Theme.For(set.Style);
             double k = set.Scale;
+            Anim.Enabled = set.Animations;
             bool vertical = DockLayout.Vertical(set.Edge);
             _row = vertical
                 ? new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4 * k, 0, 4 * k) }
@@ -92,6 +93,7 @@ namespace KutayDock
                     "volume" => new VolumeTile(_s, _theme),
                     "system" => new SystemTile(_s, _theme),
                     "network" => new NetworkTile(_s, _theme),
+                    "warp" => new WarpTile(_s, _theme),
                     "storage" => new StorageTile(_s, _theme),
                     "screenshot" => new ScreenshotTile(_s, _theme),
                     "battery" => new BatteryTile(_s, _theme),
@@ -191,14 +193,20 @@ namespace KutayDock
         void UpdateVisibility()
         {
             bool show = !_userHidden && !_hiddenForFullscreen;
-            if (show && !IsVisible)
+            if (show && (!IsVisible || _hiding))
             {
-                Show();
+                _hiding = false;
+                if (!IsVisible) Show();
                 // Gizliyken monitör/çözünürlük/AppBar değişmiş olabilir: yerleşimi düzen bittikten sonra da tazele.
                 Place();
                 Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
+                Anim.Slide(this, _body, _s.Settings.Edge, true);
             }
-            else if (!show && IsVisible) Hide();
+            else if (!show && IsVisible && !_hiding)
+            {
+                _hiding = true;
+                Anim.Slide(this, _body, _s.Settings.Edge, false, () => { if (_hiding) { _hiding = false; Hide(); } });
+            }
         }
 
         void Refresh()

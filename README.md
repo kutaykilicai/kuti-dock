@@ -1,10 +1,24 @@
 # Kutay Dock
 
-Windows 10/11 için ekranın altında yüzen, canlı widget'lı akıllı dock. C# / .NET 8 / WPF. Sürüm 1.3.
+Windows 10/11 için ekranın altında yüzen, canlı widget'lı akıllı dock. C# / .NET 8 / WPF. Sürüm 1.5.
 
 Widget'lar: Başlat, Uygulamalar (Windows 11 tarzı canlı pencere önizlemesi, UWP simgeleri), Limitler (Grok Bot;
 tıklayınca Cursor), Ses, Sistem, Ağ, Depolama, Ekran görüntüsü (ShareX), Pil, Gizli simgeler, Saat/hava.
 İsteğe bağlı: Windows görev çubuğunu (hangi kenarda olursa olsun, çoklu monitör) otomatik gizleme.
+
+### 1.5
+- macOS büyütmesi, açılış sıçraması, dock ve panellerin açılma/kapanma animasyonları; Windows görev çubuğunu tamamen
+  kaldırma (dock kapanınca/çökünce geri gelir, Explorer yeniden başlatılmaz). Başlat düğmesi yalnızca Başlat menüsünü açar.
+- Diskler panelinde klasör boyutları (Everything, TreeSize benzeri, içine gir/geri), Windows optimizasyonu paneli
+  (RAM, geçici dosyalar MB önizleme + onay, DNS; oyun açıkken pasif), ses çıkış aygıtı listesi, Cloudflare WARP
+  bağlan/kes, saatin altında tam tarih, varsayılan arama Windows araması gibi (uygulamalar, ayarlar, dosyalar);
+  Everything isteğe bağlı.
+
+### Gravitone'dan alınanlar (MIT)
+[Gravitone](https://github.com/lupanostefano/Gravitone), Copyright (c) 2026 Stefano Lupano, MIT lisanslı. Büyütme
+(kosinüs tümseği, tau değerleri), sıçrama (parabol ve süreler) ve görev çubuğunu kaldırma yöntemi (otomatik gizleme +
+gizleme + olay kancası + bekçi süreci) uyarlandı. Logo, ad, simgeler ve Genie efekti (Direct3D) alınmadı. Lisans metni
+ve ayrıntılar: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ### Limit verisinin kaynağı
 - **İsteğe bağlı Cursor girişi (1.3):** Ayarlar'daki düğmeyle Kutay Dock kendi Cursor oturumunu açar (tarayıcıda onay,

@@ -28,9 +28,19 @@ public sealed class Settings
     /// <summary>Tam ekran oyun/video varken dock'u gizle.</summary>
     public bool HideOnFullscreen { get; set; } = true;
 
+    /// <summary>Windows görev çubuğunu dock çalışırken tamamen kaldır (Gravitone yöntemi; kapanınca/çökünce geri gelir).</summary>
+    public bool RemoveWindowsTaskbar { get; set; } = false;
+
+    /// <summary>Arama: Windows araması yerine Everything kullan.</summary>
+    public bool SearchWithEverything { get; set; } = false;
+    /// <summary>macOS büyütmesi (imleç çevresindeki simgeler büyür).</summary>
+    public bool Magnification { get; set; } = true;
+    /// <summary>Açılış sıçraması, dock/panel açılma-kapanma animasyonları.</summary>
+    public bool Animations { get; set; } = true;
+
     public List<string> Widgets { get; set; } = new()
     {
-        "start", "search", "apps", "ai", "volume", "system", "network", "storage", "screenshot", "battery", "tray", "clock"
+        "start", "search", "apps", "ai", "volume", "system", "network", "warp", "storage", "screenshot", "battery", "tray", "clock"
     };
 
     /// <summary>Ayar dosyası sürümü (1.0'da alan yoktu = 0). 2 = Kutay Dock 1.1. Load() her zaman Migrate() çağırır.</summary>
@@ -93,6 +103,17 @@ public sealed class Settings
             // 1.4.1: Everything araması Başlat'ın hemen sonrasına
             if (!Widgets.Contains("search")) Widgets.Insert(Widgets.IndexOf("start") + 1, "search");
             Version = 4;
+        }
+        if (Version < 5)
+        {
+            // 1.5: WARP düğmesi Ağ'ın yanına; görev çubuğunu gizleyen kullanıcıda tamamen kaldırma açılır
+            if (!Widgets.Contains("warp"))
+            {
+                int n = Widgets.IndexOf("network"), c = Widgets.IndexOf("clock");
+                Widgets.Insert(n >= 0 ? n + 1 : c >= 0 ? c : Widgets.Count, "warp");
+            }
+            if (AutoHideWindowsTaskbar) RemoveWindowsTaskbar = true;
+            Version = 5;
         }
         return this;
     }
