@@ -1,0 +1,224 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Windows;
+using KutiDock.Core;
+using KutiDock.Tiles;
+using Forms = System.Windows.Forms;
+
+namespace KutiDock
+{
+    public partial class App : Application
+    {
+        static Mutex _single;
+        Services _services;
+        DockWindow _dock, _dockRight;           // Kuti widget şeridi (Mac dock açıkken altta sol ve sağ grup)
+        KutiDock.Mac.UI.DockWindow _mac;         // Gravitone motoru: macOS dock + menü çubuğu
+        KutiDock.Mac.Core.DockConfig _macConfig;
+        Forms.NotifyIcon _tray;
+        SettingsWindow _settingsWindow;
+        static string SettingsPath => Path.Combine(Services.DataDir, "ayarlar.json");
+
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+            // Yardımcı kipler (pencere açmaz): görev çubuğu bekçisi ve yönetici gerektiren temizlik
+            if (e.Args.Length > 0 && e.Args[0] == TaskbarRemover.GuardArg) { Shutdown(TaskbarRemover.RunGuard(e.Args)); return; }
+            if (e.Args.Length > 0 && e.Args[0] == Optimizer.AdminArg) { Shutdown(Optimizer.RunAdmin(e.Args)); return; }
+            // Gravitone'un "güvenli tasarım" bekçisi ve acil durum anahtarları (pencere açmaz)
+            switch (e.Args.FirstOrDefault())
+            {
+                case KutiDock.Mac.Core.Guard.SpawnArg: Shutdown(KutiDock.Mac.Core.Guard.RunSpawner(e.Args)); return;
+                case KutiDock.Mac.Core.Guard.WatchArg: Shutdown(KutiDock.Mac.Core.Guard.RunGuard(e.Args)); return;
+                case "--restore-taskbar": KutiDock.Mac.Core.TaskbarState.Restore(force: true); Shutdown(0); return;
+                case KutiDock.Mac.Core.AutoStart.FallbackArg: KutiDock.Mac.Core.TaskbarState.RestoreIfOrphaned(); Shutdown(0); return;
+            }
+            _single = new Mutex(true, "KutiDock.TekKopya", out bool first);
+            if (!first) { Shutdown(); return; }
+
+            DispatcherUnhandledException += (_, ex) => { Log(ex.Exception); ex.Handled = true; };
+            AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
+            {
+                Log(ex.ExceptionObject as Exception); AppBar.RestoreTaskbar(); TaskbarRemover.SetEnabled(false);
+                KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
+            };
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
+            // Oturum açılışında Explorer görev çubuğunu kurmadan başlamış olabilir: tepsi ve app bar'lar onu ister
+            if (e.Args.Contains(KutiDock.Mac.Core.AutoStart.AutoStartArg)) WaitForExplorer();
+
+            // Eski adın (Kutay Dock) ayarları ve Cursor oturumu yeni klasöre bir kez kopyalanır
+            try { DataMigration.Run(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KutayDock"), Services.DataDir); } catch (Exception) { }
+            TaskbarRemover.RestoreOrphaned();
+            AppBar.ShowAllTaskbars();
+            var settings = Settings.Load(SettingsPath);
+            if (!File.Exists(SettingsPath)) { try { settings.Save(SettingsPath); } catch (Exception) { } }
+            _services = new Services(settings);
+            if (settings.MacDock) StartMac();
+            BuildStrips();
+            if (_mac == null)
+            {
+                if (settings.RemoveWindowsTaskbar) TaskbarRemover.SetEnabled(true);
+                else if (settings.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
+            }
+            CreateTray();
+        }
+
+        /// <summary>Mac dock (Gravitone): akrilik plaka, dalga büyütme, Genie, menü çubuğu, yığınlar, Geri Dönüşüm Kutusu, bekçi.</summary>
+        void StartMac()
+        {
+            try
+            {
+                KutiDock.Mac.Core.Theme.Refresh();
+                _macConfig = KutiDock.Mac.Core.DockConfig.LoadOrCreate();
+                // Windows ile başlat kaydı varsa Mac dock ayarı da onu göstersin (ayar değişince kayıt silinmesin)
+                if (KutiDock.Mac.Core.AutoStart.IsEnabled && !_macConfig.Settings.StartWithWindows) { _macConfig.Settings.StartWithWindows = true; _macConfig.Save(); }
+                KutiDock.Mac.Core.Loc.Init(_macConfig.Settings.Language);
+                KutiDock.Mac.UI.DockWindow.WindowPreviewRequested = (wins, icon, anchor, edge) =>
+                    WindowPreview.Open(wins, wins, icon ?? ShellIcons.Generic, anchor, edge switch
+                    {
+                        KutiDock.Mac.Core.DockEdge.Left => DockEdge.Sol, KutiDock.Mac.Core.DockEdge.Right => DockEdge.Sag, _ => DockEdge.Alt,
+                    });
+                KutiDock.Mac.UI.DockWindow.WindowPreviewDismissed = WindowPreview.CloseCurrent;
+                KutiDock.Mac.UI.DockWindow.KutiSettingsRequested = OpenSettings;
+                var backdrop = new KutiDock.Mac.UI.BackdropWindow();
+                backdrop.Show();
+                _mac = new KutiDock.Mac.UI.DockWindow(_macConfig, backdrop);
+                _mac.Show();
+            }
+            catch (Exception ex) { Log(ex); _mac = null; }
+        }
+
+        /// <summary>
+        /// Kuti widget şeridi. Mac dock açıkken uygulamalar Mac dock'ta olduğundan "apps" çıkar; menü çubuğu açıksa gizli
+        /// simgeler (tray) de çıkar (menü çubuğu tepsiyi gösterir). Altta: "apps"tan öncekiler sol köşede, sonrakiler sağ köşede.
+        /// </summary>
+        void BuildStrips()
+        {
+            _dock?.Close(); _dockRight?.Close(); _dock = _dockRight = null;
+            var s = _services.Settings;
+            if (_mac == null) { _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify); _dock.Show(); return; }
+            bool menuBar = _macConfig.Settings.MenuBar;
+            bool Keep(string id) => id != "apps" && !(menuBar && id == "tray");
+            if (s.Edge == DockEdge.Alt)
+            {
+                int split = s.Widgets.IndexOf("apps");
+                var left = split < 0 ? new List<string>() : s.Widgets.Take(split).Where(Keep).ToList();
+                var right = (split < 0 ? s.Widgets : s.Widgets.Skip(split + 1)).Where(Keep).ToList();
+                if (left.Count > 0) { _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify, left, StripAnchor.SolAlt); _dock.Show(); }
+                if (right.Count > 0) { _dockRight = new DockWindow(_services, OpenSettings, ExitApp, Notify, right, StripAnchor.SagAlt); _dockRight.Show(); }
+            }
+            else
+            {
+                _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify, s.Widgets.Where(Keep).ToList(), StripAnchor.Kenar);
+                _dock.Show();
+            }
+        }
+
+        static void WaitForExplorer()
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(45);
+            while (KutiDock.Mac.Core.TaskbarState.FindExplorerTray() == IntPtr.Zero && DateTime.UtcNow < deadline) Thread.Sleep(200);
+            Thread.Sleep(500);
+        }
+
+        void CreateTray()
+        {
+            System.Drawing.Icon icon;
+            try
+            {
+                var s = GetResourceStream(new Uri("pack://application:,,,/KutiDock;component/Assets/app.ico")).Stream;
+                icon = new System.Drawing.Icon(s);
+            }
+            catch (Exception) { icon = System.Drawing.SystemIcons.Application; }
+            _tray = new Forms.NotifyIcon { Icon = icon, Text = "Kuti Dock", Visible = true };
+            var menu = new Forms.ContextMenuStrip();
+            menu.Items.Add("Ayarlar…", null, (_, _) => OpenSettings());
+            menu.Items.Add("Widget şeridini gizle / göster", null, (_, _) => { _dock?.ToggleUserHidden(); _dockRight?.ToggleUserHidden(); });
+            menu.Items.Add("Ayar klasörünü aç", null, (_, _) => { Directory.CreateDirectory(Services.DataDir); System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Services.DataDir) { UseShellExecute = true }); });
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add("Çıkış", null, (_, _) => ExitApp());
+            _tray.ContextMenuStrip = menu;
+            _tray.MouseClick += (_, ev) => { if (ev.Button == Forms.MouseButtons.Left) OpenSettings(); };
+        }
+
+        void Notify(string title, string body)
+        {
+            try { _tray?.ShowBalloonTip(6000, title, string.IsNullOrEmpty(body) ? " " : body, Forms.ToolTipIcon.None); } catch (Exception) { }
+        }
+
+        void OpenSettings()
+        {
+            if (_settingsWindow != null) { _settingsWindow.Activate(); return; }
+            _settingsWindow = new SettingsWindow(_services.Settings, Apply, _services.Cursor, () => OpenMacSettings());
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Show();
+            _settingsWindow.Activate();
+        }
+
+        void Apply(Settings s)
+        {
+            bool hideChanged = s.AutoHideWindowsTaskbar != _services.Settings.AutoHideWindowsTaskbar
+                || s.RemoveWindowsTaskbar != _services.Settings.RemoveWindowsTaskbar;
+            bool macChanged = s.MacDock != _services.Settings.MacDock;
+            try { s.Save(SettingsPath); } catch (Exception ex) { Log(ex); }
+            _services.Settings = s;
+            _services.InvalidateData();
+            if (macChanged)
+            {
+                if (s.MacDock) { TaskbarRemover.SetEnabled(false); AppBar.SetTaskbarAutoHide(false); StartMac(); }
+                else { StopMac(); hideChanged = true; }
+            }
+            if (hideChanged && _mac == null)
+            {
+                TaskbarRemover.SetEnabled(false);
+                AppBar.SetTaskbarAutoHide(false);
+                if (s.RemoveWindowsTaskbar) TaskbarRemover.SetEnabled(true);
+                else if (s.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
+            }
+            BuildStrips();
+        }
+
+        void StopMac()
+        {
+            if (_mac == null) return;
+            try { _mac.ReleaseShell(); _mac.Close(); } catch (Exception ex) { Log(ex); }
+            _mac = null;
+        }
+
+        /// <summary>Kuti ayarlarından Mac dock ayarlarını (büyütme, Genie, menü çubuğu, ekran…) açar.</summary>
+        void OpenMacSettings() { if (_mac != null) _mac.OpenSettings(); }
+
+        void ExitApp()
+        {
+            try { _services?.Dispose(); } catch (Exception) { }
+            AppBar.RestoreTaskbar();
+            TaskbarRemover.SetEnabled(false);
+            StopMac();
+            if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
+            _dock?.Close(); _dockRight?.Close();
+            Shutdown();
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            try { _mac?.ReleaseShell(); } catch (Exception) { } // Mac dock menüsünden "Çık" da buraya gelir
+            if (_tray != null) { _tray.Visible = false; _tray.Dispose(); _tray = null; }
+            AppBar.RestoreTaskbar();
+            TaskbarRemover.SetEnabled(false);
+            base.OnExit(e);
+        }
+
+        static void Log(Exception ex)
+        {
+            if (ex == null) return;
+            try
+            {
+                Directory.CreateDirectory(Services.DataDir);
+                File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {ex}\n\n");
+            }
+            catch (Exception) { }
+        }
+    }
+}

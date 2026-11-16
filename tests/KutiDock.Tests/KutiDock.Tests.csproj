@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <!-- Gravitone (Mac dock) saf mantık dosyaları: WPF'siz derlenebildiği için Linux'ta da test edilir -->
+  <ItemGroup>
+    <Compile Include="..\..\src\KutiDock.Mac\Core\DockLayout.cs" Link="Mac\DockLayout.cs" />
+    <Compile Include="..\..\src\KutiDock.Mac\Core\Bouncer.cs" Link="Mac\Bouncer.cs" />
+    <Compile Include="..\..\src\KutiDock.Mac\Core\Loc.cs" Link="Mac\Loc.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KutiDock.Core\KutiDock.Core.csproj" />
+  </ItemGroup>
+</Project>

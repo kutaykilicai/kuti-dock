@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Gravitone (MIT, © 2026 Stefano Lupano) kaynak kodu: https://github.com/lupanostefano/Gravitone
+       Kuti Dock'un macOS dock motoru (büyütme, sıçrama, Genie, menü çubuğu, yığınlar, Geri Dönüşüm Kutusu, bekçi). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>KutiDock.Mac</RootNamespace>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <DebugType Condition="'$(Configuration)'=='Release'">none</DebugType>
+    <NoWarn>CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <InternalsVisibleTo Include="KutiDock" />
+    <InternalsVisibleTo Include="KutiDock.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ManagedShell" Version="0.0.374" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.8.3" />
+  </ItemGroup>
+</Project>

@@ -7,6 +7,30 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6'DA NE DEĞİŞTİ (yeni adı: Kuti Dock)
+  + Gerçek Mac dock: Gravitone'un (MIT, Stefano Lupano) kaynak kodu doğrudan
+    alındı. Dalga gibi büyütme (imlecin altındaki simge yerinde kalır),
+    simge adı etiketleri, çalışan uygulama noktaları, açılışta ve uygulama
+    dikkat isteyince sıçrama, küçültüp geri açarken GPU'da Genie efekti.
+  + Windows 11'in kendi akrilik plakası; açık/koyu temaya uyar, uyku ve
+    kilitten sonra yeniden uygulanır.
+  + Üstte menü çubuğu: aktif uygulama, logoda Başlat, tepsi simgeleri,
+    Wi-Fi sinyali, ses, pil, tarih ve saat; her monitörde.
+  + Simgeleri sürükleyerek sırala; dışarı sürükle → duman efektiyle kalkar.
+    Program, kısayol, klasör, Bu Bilgisayar ya da Denetim Masası'nı dock'a
+    bırak → sabitlenir. Klasörler yığın olur. Gerçek Geri Dönüşüm Kutusu.
+  + İmleci başka bir ekranın alt kenarına it → dock oraya geçer.
+  + Görev çubuğu her durumda geri gelir (çökme, Görev Yöneticisi'nden
+    öldürme, oturum kapatma, elektrik kesintisi). Ctrl+Alt+Shift+B görev
+    çubuğunu geçici gösterir. Acil durum: KutiDock.exe --restore-taskbar
+  + Widget'lar alt şeridin iki köşesinde (Başlat ve Ara solda, diğerleri
+    sağda). Uygulamaların canlı pencere önizlemesi Mac dock'ta da var.
+  + Ayarlar > Mac dock: kapatırsan 1.5'teki klasik dock geri gelir.
+    Mac dock'un kendi ayarları (Genie, büyütme, menü çubuğu, ekran) için
+    dock'a sağ tık → "Kuti Dock ayarları…".
+  + Ad: KutiDock.exe, veriler %APPDATA%\KutiDock. Eski ayarlar ve Cursor
+    oturumu ilk açılışta kendiliğinden taşınır.
+
 1.5'TE NE DEĞİŞTİ
   + macOS hissi: uygulama simgeleri imlecin çevresinde büyür (kosinüs
     büyütmesi), kapalı bir uygulama açılırken simgesi pencere gelene kadar
@@ -42,7 +66,7 @@ Ne bu?
     Yazdıkça ilk 20 sonuç simge + ad + klasörle dock'un yanındaki küçük
     panelde listelenir. Enter/tık aç, Ctrl+Enter klasörde göster, ↑↓ seç,
     Esc kapat. Everything'in belgelenmiş IPC'si kullanılır (DLL gerekmez);
-    Kutay Dock Everything'i başlatmaz, penceresini açmaz, ayarlarına dokunmaz.
+    Kuti Dock Everything'i başlatmaz, penceresini açmaz, ayarlarına dokunmaz.
     Everything kapalıysa panel "Everything çalışmıyor" der.
 
 1.4'TE NE DEĞİŞTİ
@@ -90,11 +114,11 @@ Ne bu?
     (cursor.com/api/dashboard/get-sand-usage-status, cursor.com/api/usage-summary);
     Cursor haber vermeden değiştirebilir, o zaman widget elle değere döner.
   - Oturum belirteci TÜM Cursor hesabına erişir. Yalnızca bu PC'de,
-    %APPDATA%\KutayDock\cursor-oturum.bin içinde Windows DPAPI (yalnızca bu
+    %APPDATA%\KutiDock\cursor-oturum.bin içinde Windows DPAPI (yalnızca bu
     Windows kullanıcısı çözebilir) ile şifreli durur; loglara yazılmaz.
     "Çıkış yap" dosyayı siler. Bu dosyayı kimseyle paylaşma.
   - Cursor/Grok Bot uygulamalarının belirteçleri, çerezleri ya da yerel
-    veritabanı OKUNMAZ; belirteç yalnızca Kutay Dock'un kendi girişinden gelir.
+    veritabanı OKUNMAZ; belirteç yalnızca Kuti Dock'un kendi girişinden gelir.
 
 1.2'DE NE DEĞİŞTİ
   + Pencere önizleme paneli (Windows 11 görev çubuğu gibi): uygulama simgesinin
@@ -118,15 +142,15 @@ Ne bu?
     görünür (eskiden boş "A" harfi çıkıyordu).
   + "Görev çubuğunu otomatik gizle" artık çubuk hangi kenardaysa (üst/alt/sol/sağ)
     ve iki monitörde de çalışır. Önce Windows'un kendi ayarı denenir; Windows
-    bunu reddederse (Windows 11 25H2'de oluyor) Kutay Dock tüm görev çubuklarını
+    bunu reddederse (Windows 11 25H2'de oluyor) Kuti Dock tüm görev çubuklarını
     gizler, fareyi çubuğun olduğu ekran kenarına götürünce geri gelir.
-    Kutay Dock kapanınca görev çubukları eski hâline döner. Explorer yeniden
+    Kuti Dock kapanınca görev çubukları eski hâline döner. Explorer yeniden
     başlatılmaz, kayıt defteri değiştirilmez.
   - Kaldırıldı: Claude/Codex, Şimdi çalan (medya), Ekran süresi, Takvim ve
     takvime bağlı uyarılar. Eski ayarlar otomatik taşınır.
 
 ÇALIŞTIRMA
-  1) KutayDock.exe'ye çift tıkla. Kurulum yok, yönetici izni gerekmez.
+  1) KutiDock.exe'ye çift tıkla. Kurulum yok, yönetici izni gerekmez.
      Tek dosya; .NET kurulu olmasa da çalışır (self-contained, win-x64).
   2) İlk açılışta SmartScreen "Windows bilgisayarınızı korudu" diyebilir
      (imzasız exe): "Ek bilgi" > "Yine de çalıştır".
@@ -193,7 +217,7 @@ OLMAYANLAR (dürüst liste)
   - Dock yalnızca ana monitörde durur.
   - Otomatik gizlemenin yedek yolunda çubuk kenara gelince ~0,15 sn içinde
     açılır; gizliyken o kenardaki boşluk (çubuk yüksekliği) Windows tarafından
-    ayrılmış kalır. Kutay Dock beklenmedik şekilde öldürülürse (Görev
+    ayrılmış kalır. Kuti Dock beklenmedik şekilde öldürülürse (Görev
     Yöneticisi'nden "görevi sonlandır") görev çubuğu gizli kalabilir: Kutay
     Dock'u yeniden aç (açılışta çubukları geri getirir) ya da oturumu kapat-aç.
 
@@ -203,9 +227,9 @@ TEST DURUMU
     uyarı motoru, ayar taşıma, hava, ayarlar).
 
 VERİLER
-  %APPDATA%\KutayDock\ayarlar.json      ayarlar (elle girilen limitler dahil)
-  %APPDATA%\KutayDock\hata.log          hata kaydı (belirteç asla yazılmaz)
-  %APPDATA%\KutayDock\cursor-oturum.bin  Cursor oturumu (DPAPI ile şifreli; yalnızca girişte)
+  %APPDATA%\KutiDock\ayarlar.json      ayarlar (elle girilen limitler dahil)
+  %APPDATA%\KutiDock\hata.log          hata kaydı (belirteç asla yazılmaz)
+  %APPDATA%\KutiDock\cursor-oturum.bin  Cursor oturumu (DPAPI ile şifreli; yalnızca girişte)
   1.0'dan kalan ekran-suresi.json artık kullanılmıyor; istersen silebilirsin.
   Hesap yok, telemetri yok. Dışarı çıkan: hava durumu (open-meteo.com) ve
   yalnızca Cursor girişi yaptıysan cursor.com / api2.cursor.sh istekleri.

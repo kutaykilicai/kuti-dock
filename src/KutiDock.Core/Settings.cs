@@ -1,0 +1,150 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace KutiDock.Core;
+
+public enum DockStyle { Cam, Siyah, Gece, Beyaz }
+public enum DockEdge { Alt, Ust, Sol, Sag }
+
+/// <summary>Elle girilen limit değeri (yüzde + sıfırlanma zamanı).</summary>
+public sealed class ManualLimit
+{
+    public double? Percent { get; set; }
+    public DateTimeOffset? ResetsAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
+}
+
+/// <summary>Tüm ayarlar. %APPDATA%\KutiDock\ayarlar.json içinde durur.</summary>
+public sealed class Settings
+{
+    public DockStyle Style { get; set; } = DockStyle.Cam;
+    public DockEdge Edge { get; set; } = DockEdge.Alt;
+    public bool FullWidth { get; set; } = false;
+    public double Scale { get; set; } = 1.0;
+    /// <summary>Pencereler dock'un altına girmesin diye ekran alanı ayır.</summary>
+    public bool ReserveSpace { get; set; } = false;
+    /// <summary>Windows görev çubuğunu otomatik gizle. Varsayılan KAPALI.</summary>
+    public bool AutoHideWindowsTaskbar { get; set; } = false;
+    /// <summary>Tam ekran oyun/video varken dock'u gizle.</summary>
+    public bool HideOnFullscreen { get; set; } = true;
+
+    /// <summary>Windows görev çubuğunu dock çalışırken tamamen kaldır (Gravitone yöntemi; kapanınca/çökünce geri gelir).</summary>
+    public bool RemoveWindowsTaskbar { get; set; } = false;
+
+    /// <summary>Arama: Windows araması yerine Everything kullan.</summary>
+    public bool SearchWithEverything { get; set; } = false;
+    /// <summary>1.6: macOS dock motoru (Gravitone): uygulamalar Mac dock'ta, menü çubuğu üstte; Kuti widget'ları yanında.</summary>
+    public bool MacDock { get; set; } = true;
+    /// <summary>macOS büyütmesi (imleç çevresindeki simgeler büyür).</summary>
+    public bool Magnification { get; set; } = true;
+    /// <summary>Açılış sıçraması, dock/panel açılma-kapanma animasyonları.</summary>
+    public bool Animations { get; set; } = true;
+
+    public List<string> Widgets { get; set; } = new()
+    {
+        "start", "search", "apps", "ai", "volume", "system", "network", "warp", "storage", "screenshot", "battery", "tray", "clock"
+    };
+
+    /// <summary>Ayar dosyası sürümü (1.0'da alan yoktu = 0). 2 = Kuti Dock 1.1. Load() her zaman Migrate() çağırır.</summary>
+    public int Version { get; set; }
+
+    // ShareX (boşsa otomatik bulunur)
+    public string ShareXPath { get; set; } = "";
+
+    // Hava durumu (varsayılan İstanbul)
+    public string City { get; set; } = "İstanbul";
+    public double Latitude { get; set; } = 41.01;
+    public double Longitude { get; set; } = 28.97;
+
+    // Limitler. Grok Bot ve Cursor kişisel planlar için belgelenmiş bir kullanım API'si sunmuyor;
+    // değerler elle girilir (Ayarlar ya da widget paneli).
+    public ManualLimit GrokBot { get; set; } = new();
+    public ManualLimit Cursor { get; set; } = new();
+
+    // Akıllı uyarılar
+    public bool AlertAiLimit { get; set; } = true;
+    public int AiAlertPercent { get; set; } = 85;
+    public bool AlertBattery { get; set; } = true;
+    public int BatteryAlertPercent { get; set; } = 15;
+    public bool QuietHoursEnabled { get; set; } = true;
+    public int QuietStartHour { get; set; } = 23;
+    public int QuietEndHour { get; set; } = 8;
+
+    public bool Use24Hour { get; set; } = true;
+
+    static readonly JsonSerializerOptions Opts = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    public static Settings Load(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                return (JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Opts) ?? new Settings()).Migrate();
+        }
+        catch (Exception) { /* bozuk dosya: varsayılanlarla başla */ }
+        return new Settings().Migrate();
+    }
+
+    /// <summary>1.0 ayarlarını 1.1'e taşır: kaldırılan widget'lar çıkar, Depolama ve Ekran görüntüsü eklenir.</summary>
+    public Settings Migrate()
+    {
+        if (Version < 2) MigrateWidgets();
+        if (Version < 3)
+        {
+            // 1.3.2: RocketDock gibi yüzen dock; ekranda yer ayırma ve tam genişlik varsayılan kapalı
+            ReserveSpace = false;
+            FullWidth = false;
+            Version = 3;
+        }
+        if (Version < 4)
+        {
+            // 1.4.1: Everything araması Başlat'ın hemen sonrasına
+            if (!Widgets.Contains("search")) Widgets.Insert(Widgets.IndexOf("start") + 1, "search");
+            Version = 4;
+        }
+        if (Version < 5)
+        {
+            // 1.5: WARP düğmesi Ağ'ın yanına; görev çubuğunu gizleyen kullanıcıda tamamen kaldırma açılır
+            if (!Widgets.Contains("warp"))
+            {
+                int n = Widgets.IndexOf("network"), c = Widgets.IndexOf("clock");
+                Widgets.Insert(n >= 0 ? n + 1 : c >= 0 ? c : Widgets.Count, "warp");
+            }
+            if (AutoHideWindowsTaskbar) RemoveWindowsTaskbar = true;
+            Version = 5;
+        }
+        if (Version < 6)
+        {
+            // 1.6 (Kuti Dock): Mac dock motoru açık
+            MacDock = true;
+            Version = 6;
+        }
+        return this;
+    }
+
+    void MigrateWidgets()
+    {
+        Widgets.RemoveAll(w => w is "media" or "screentime" or "calendar");
+        int at = Widgets.IndexOf("battery");
+        if (at < 0) at = Widgets.IndexOf("clock");
+        if (at < 0) at = Widgets.Count;
+        foreach (var w in new[] { "screenshot", "storage" })
+            if (!Widgets.Contains(w)) Widgets.Insert(at, w);
+        Version = 2;
+    }
+
+    public void Save(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(this, Opts));
+        File.Move(tmp, path, overwrite: true);
+    }
+
+    public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Opts);
+    public static T? Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, Opts);
+}

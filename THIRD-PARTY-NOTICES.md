@@ -1,20 +1,21 @@
 # Üçüncü taraf bildirimleri
 
-## Gravitone
+## Gravitone — Mac dock motoru
 
-- Kaynak: https://github.com/lupanostefano/Gravitone
-- Lisans: MIT, Copyright (c) 2026 Stefano Lupano
-- Uyarlanan kısımlar (kod yeniden yazıldı, yöntem ve parametreler alındı):
-  - Büyütme: kosinüs tümseği, etki mesafesi = simge boyu × 3,2, üstel yaklaşma
-    (büyürken tau 0,045 sn, sönerken 0,075 sn, gizle/göster 0,065 sn). Kaynak: `Core/DockLayout.cs`, `UI/DockWindow.cs`.
-    Kutay Dock'taki yeri: `src/KutayDock.Core/Motion.cs` (Magnify), `src/KutayDock/Tiles/AppsTile.cs`.
-  - Sıçrama: parabol 4p(1−p); açılışta periyot 0,62 sn, yükseklik 0,5, 12 sn sınır; dikkat sıçraması 3 × 0,5 sn,
-    yükseklik 0,65, ara 1,1 sn. Kaynak: `Core/Bouncer.cs`. Kutay Dock'taki yeri: `src/KutayDock.Core/Motion.cs` (Bouncer).
-  - Görev çubuğunu kaldırma: otomatik gizleme + tüm görev çubuğu pencerelerini gizleme, EVENT_OBJECT_SHOW kancası ve
-    1 sn'lik denetim, işaret dosyasında asıl durum, StuckRects3 kalıcılığı, çökmeye karşı ayrı bekçi süreci.
-    Kaynak: `Core/TaskbarReplacer.cs`, `Core/TaskbarState.cs`, `Core/Guard.cs`. Kutay Dock'taki yeri: `src/KutayDock/TaskbarRemover.cs`.
-- Alınmayanlar: Gravitone adı, logosu, simgeleri ve diğer marka varlıkları; Genie efekti (Direct3D/Vortice gerektirir);
-  ManagedShell ve diğer bağımlılıklar.
+- Kaynak: https://github.com/lupanostefano/Gravitone (commit 93e9d18)
+- Lisans: MIT, Copyright (c) 2026 Stefano Lupano (tam metin aşağıda ve `src/KutiDock.Mac/LICENSE-Gravitone.txt`)
+- 1.6'dan itibaren Gravitone'un kaynak kodu (`Core/`, `Interop/`, `UI/`) `src/KutiDock.Mac/` altında **doğrudan** kullanılır.
+  Her dosyanın başında kaynak ve lisans notu vardır. Gravitone'dan gelenler:
+  dalga büyütme (imlecin altındaki simge yerinde kalır), etiketler, çalışan uygulama noktaları, açılış ve dikkat sıçraması,
+  GPU'da Genie küçültme/geri açma (Direct3D 11 + DirectComposition), Windows 11 akrilik plaka (DWM sistem arka planı),
+  üst menü çubuğu (aktif uygulama, Başlat, tepsi simgeleri, Wi-Fi, ses, pil, tarih/saat; her monitörde),
+  sürükleyerek sıralama, dışarı sürükleyince duman, bırakarak sabitleme, klasör yığınları, Geri Dönüşüm Kutusu,
+  çoklu monitör/DPI ve imleci izleme, uyku/kilit/oturum değişimi, görev çubuğunu değiştirme ve çökme bekçisi.
+- Kuti Dock değişiklikleri: ad ve veri klasörü (%APPDATA%\KutiDock), İtalyanca yerine Türkçe arayüz, .NET 8,
+  ilk açılışta Windows görev çubuğu sabitlemelerinin alınması, "Windows ile başlat" varsayılanı kapalı,
+  Kuti'nin canlı pencere önizlemesi ve ayar menüsü bağlantıları.
+- Alınmayanlar: Gravitone adı, logosu, simgesi, görselleri ve kurulum programı.
+- Ayrıca 1.5'te `src/KutiDock.Core/Motion.cs` ve `src/KutiDock/TaskbarRemover.cs` Gravitone'dan uyarlanmıştı (klasik kip).
 
 ```
 MIT License
@@ -39,3 +40,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Gravitone'un bağımlılıkları (Kuti Dock exe'sinin içinde)
+
+| Bileşen | Kullanım | Lisans |
+| --- | --- | --- |
+| [ManagedShell](https://github.com/cairoshell/ManagedShell) 0.0.374 | Menü çubuğundaki tepsi simgeleri | Apache-2.0 |
+| [Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows) 3.8.3 (Direct3D11, DirectComposition, D3DCompiler, DXGI) | GPU'da Genie efekti | MIT |
+| [SharpGen.Runtime](https://github.com/SharpGenTools/SharpGenTools) | Vortice'in COM bağlantısı | MIT |
+
+macOS ve Dock, Apple Inc.'in ticari markalarıdır; Windows, Microsoft'un ticari markasıdır. Kuti Dock bu şirketlerle bağlantılı değildir.

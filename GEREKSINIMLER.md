@@ -1,4 +1,4 @@
-# Gereksinim defteri ve kapsam (Kutay Dock 1.1)
+# Gereksinim defteri ve kapsam (Kuti Dock 1.1)
 
 Varsayımlar (karpathy): hedef "aynı his ve düzen", ticari ürünün birebir kodu değil. En basit çalışan çözüm:
 tek pencereli WPF dock + saniyelik zamanlayıcı + saf mantık katmanı. Ölçütler aşağıda; ✔ = karşılandı,
