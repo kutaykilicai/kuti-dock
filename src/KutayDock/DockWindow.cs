@@ -27,8 +27,9 @@ namespace KutayDock
         IntPtr _hwnd;
         AppBar _appBar;
         bool _hiddenForFullscreen, _userHidden;
-        // Tam ekran kararı 2 sn (2 tık) aynı kalınca uygulanır: Alt+Tab ve kısa odak değişimlerinde dock titreşmez.
-        readonly Debounce _fullscreen = new(2);
+        // Tam ekran 250 ms'de bir yoklanır: video/oyun ≈0,5 sn'de gizler (2 gözlem), dock 2 sn sonra geri gelir (8 gözlem).
+        readonly DispatcherTimer _fsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+        readonly Debounce _fullscreen = new(2, 8);
 
         public DockWindow(Services s, Action openSettings, Action exit, Action<string, string> notify)
         {
@@ -50,6 +51,8 @@ namespace KutayDock
             Build();
             _timer.Tick += (_, _) => Tick();
             _timer.Start();
+            _fsTimer.Tick += (_, _) => CheckFullscreen();
+            _fsTimer.Start();
             ContextMenu = MakeMenu();
         }
 
@@ -73,7 +76,10 @@ namespace KutayDock
             var set = _s.Settings;
             _theme = Theme.For(set.Style);
             double k = set.Scale;
-            _row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1 * k, 0, 1 * k, 0) };
+            bool vertical = DockLayout.Vertical(set.Edge);
+            _row = vertical
+                ? new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4 * k, 0, 4 * k) }
+                : new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1 * k, 0, 1 * k, 0) };
             _tiles = new List<Tile>();
             foreach (var id in set.Widgets)
             {
@@ -93,31 +99,40 @@ namespace KutayDock
                     _ => null,
                 };
                 if (t == null) continue;
-                _tiles.Add(t); _row.Children.Add(t);
+                _tiles.Add(t);
+                // Dikeyde sütuna sığmayan geniş widget'lar (sistem, ağ, saat…) kompakt: orantılı küçültülür
+                _row.Children.Add(vertical ? new Viewbox { Child = t, StretchDirection = StretchDirection.DownOnly, MaxWidth = 52 * k, Margin = new Thickness(0, 1 * k, 0, 1 * k) } : t);
             }
-            if (set.FullWidth)
+            if (vertical)
+            {
+                // Ekran yüksekliğine sığmazsa tüm sütun küçülür
+                var fit = new Viewbox { Child = _row, StretchDirection = StretchDirection.DownOnly, MaxHeight = Math.Max(200, SystemParameters.WorkArea.Height - 16) };
+                _body = Body(fit, k, vertical);
+            }
+            else if (set.FullWidth)
             {
                 // Tam genişlik: saat ve sonrası sağa yaslanır
                 var dock = new DockPanel { LastChildFill = false };
                 _row.HorizontalAlignment = HorizontalAlignment.Left;
                 dock.Children.Add(_row);
-                _body = Body(dock, k);
+                _body = Body(dock, k, false);
             }
-            else _body = Body(_row, k);
+            else _body = Body(_row, k, false);
             Content = _body;
             ApplyBlur();
             Refresh();
             Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
         }
 
-        Border Body(UIElement child, double k)
+        Border Body(UIElement child, double k, bool vertical)
         {
             var b = new Border
             {
-                Height = 54 * k, CornerRadius = new CornerRadius(16 * k), Background = _theme.DockBg,
+                CornerRadius = new CornerRadius(16 * k), Background = _theme.DockBg,
                 BorderBrush = _theme.DockBorder, BorderThickness = new Thickness(1), Child = child, ClipToBounds = true,
             };
-            if (_s.Settings.FullWidth)
+            if (vertical) b.Width = 58 * k; else b.Height = 54 * k;
+            if (_s.Settings.FullWidth && !vertical)
             {
                 var wa = SystemParameters.WorkArea;
                 b.Width = (_s.Settings.ReserveSpace ? SystemParameters.PrimaryScreenWidth : wa.Width) - 16;
@@ -139,26 +154,31 @@ namespace KutayDock
             double w = ActualWidth, h = ActualHeight;
             var dpi = VisualTreeHelper.GetDpi(this);
             bool top = set.Edge == DockEdge.Ust;
-            if (set.ReserveSpace) _appBar.Reserve(top, (int)Math.Ceiling((h + margin * 2) * dpi.DpiScaleY));
+            // Yer ayırma yalnızca yatay (Üst/Alt) dock için; Sol/Sağ her zaman yüzer.
+            bool reserve = set.ReserveSpace && !DockLayout.Vertical(set.Edge);
+            if (reserve) _appBar.Reserve(top, (int)Math.Ceiling((h + margin * 2) * dpi.DpiScaleY));
             else _appBar.Remove();
-            var screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
-            Rect area = set.ReserveSpace ? _appBar.ReservedRect(dpi.DpiScaleX, dpi.DpiScaleY) ?? SystemParameters.WorkArea : SystemParameters.WorkArea;
-            Left = area.Left + (area.Width - w) / 2;
-            Top = set.ReserveSpace ? area.Top + (area.Height - h) / 2 : (top ? area.Top + margin : area.Bottom - h - margin);
+            Rect area = reserve ? _appBar.ReservedRect(dpi.DpiScaleX, dpi.DpiScaleY) ?? SystemParameters.WorkArea : SystemParameters.WorkArea;
+            if (reserve) { Left = area.Left + (area.Width - w) / 2; Top = area.Top + (area.Height - h) / 2; }
+            else (Left, Top) = DockLayout.Position(set.Edge, area.Left, area.Top, area.Width, area.Height, w, h, margin);
             // Bulanıklık dikdörtgen olmasın: pencere bölgesini yuvarlak köşeli yap
             int pw = (int)Math.Round(w * dpi.DpiScaleX), ph = (int)Math.Round(h * dpi.DpiScaleY), r = (int)Math.Round(32 * k * dpi.DpiScaleX);
             Native.SetWindowRgn(_hwnd, Native.CreateRoundRectRgn(0, 0, pw + 1, ph + 1, r, r), true);
         }
 
-        void Tick()
+        void CheckFullscreen()
         {
-            // Tam ekran oyun/video varken dock çekilir ve hiçbir şey ölçülmez (oyunlarda ek yük yok).
             bool fs = _s.Settings.HideOnFullscreen && Native.ForegroundIsFullscreen(_hwnd);
             if (_fullscreen.Observe(fs))
             {
                 _hiddenForFullscreen = _fullscreen.State;
                 UpdateVisibility();
             }
+        }
+
+        void Tick()
+        {
+            // Tam ekran oyun/video varken dock çekilir ve hiçbir şey ölçülmez (oyunlarda ek yük yok).
             if (!IsVisible) return;
             _s.Tick();
             Refresh();
@@ -199,7 +219,7 @@ namespace KutayDock
 
         protected override void OnClosed(EventArgs e)
         {
-            _timer.Stop();
+            _timer.Stop(); _fsTimer.Stop();
             _appBar?.Remove();
             base.OnClosed(e);
         }

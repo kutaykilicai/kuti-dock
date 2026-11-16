@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace KutayDock.Core;
 
 public enum DockStyle { Cam, Siyah, Gece, Beyaz }
-public enum DockEdge { Alt, Ust }
+public enum DockEdge { Alt, Ust, Sol, Sag }
 
 /// <summary>Elle girilen limit değeri (yüzde + sıfırlanma zamanı).</summary>
 public sealed class ManualLimit

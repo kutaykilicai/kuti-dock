@@ -1,4 +1,4 @@
-KUTAY DOCK 1.3.2  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.4  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,16 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.4'TE NE DEĞİŞTİ
+  + Videoda dock görünmez: Chrome/YouTube/dizi siteleri ve oynatıcıların tam
+    ekranı (başlıksız, ekranı kaplayan pencere) ile Windows'un kendi tam ekran
+    sinyali (oyun/video, sunum modu) dock'u ≈0,5 sn'de gizler; dock 2 sn sonra
+    geri gelir. Başka monitördeki tam ekran yine gizlemez.
+  + Konum: Ayarlar > Görünüm'de Altta / Üstte / Solda / Sağda. Solda ve sağda
+    dock dikeydir, kenarda dikey ortalanır; simgeler alt alta, büyüme ve
+    önizleme paneli ekranın içine doğru açılır. Sütuna sığmayan widget'lar
+    küçültülerek (kompakt) gösterilir. Sol/sağ dock ekranda yer ayırmaz.
 
 1.3.2'DE NE DEĞİŞTİ
   + RocketDock gibi yüzen dock: varsayılan olarak ekranda yer ayırmaz, tam

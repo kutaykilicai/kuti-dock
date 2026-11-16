@@ -68,30 +68,46 @@ public static class FullscreenRule
     { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Windows.UI.Core.CoreWindow", "XamlExplorerHostIslandWindow" };
 
     /// <summary>
-    /// Yalnızca dock'un bulunduğu monitörü tamamen kaplayan, büyütülmemiş (maximize olmayan) ve masaüstü/kabuk sınıfı
-    /// olmayan ön plan penceresi tam ekran sayılır. Başka monitördeki tam ekran ya da büyütülmüş pencere dock'u gizlemez.
+    /// Yalnızca dock'un bulunduğu monitörü tamamen kaplayan ve masaüstü/kabuk sınıfı olmayan ön plan penceresi tam ekran
+    /// sayılır. Başlık çubuklu büyütülmüş (maximize) pencere tam ekran değildir; büyütülmüş olsa da başlıksızsa
+    /// (Chrome/YouTube HTML5 tam ekranı, oynatıcılar) tam ekrandır. Başka monitördeki pencere dock'u gizlemez.
     /// </summary>
-    public static bool HidesDock(Box window, Box windowMonitor, Box dockMonitor, bool maximized, string className)
+    public static bool HidesDock(Box window, Box windowMonitor, Box dockMonitor, bool maximized, string className, bool hasCaption = true)
     {
-        if (Desktop.Contains(className) || maximized) return false;
+        if (Desktop.Contains(className)) return false;
         if (windowMonitor != dockMonitor) return false;
+        if (maximized && hasCaption) return false;
         return window.Left <= dockMonitor.Left && window.Top <= dockMonitor.Top && window.Right >= dockMonitor.Right && window.Bottom >= dockMonitor.Bottom;
     }
+
+    // SHQueryUserNotificationState değerleri (belgelenmiş shell32 API'si)
+    public const int QunsBusy = 2, QunsD3DFullScreen = 3, QunsPresentation = 4;
+
+    /// <summary>
+    /// Geometri kuralına Windows'un kendi "tam ekran" sinyali eklenir: D3D tam ekran (oyun/video) ya da sunum modu
+    /// her zaman gizler; QUNS_BUSY (tam ekran uygulama) yalnızca ön plan penceresi dock'un monitöründeyse gizler.
+    /// </summary>
+    public static bool Decide(bool geometry, int quns, bool foregroundOnDockMonitor) =>
+        geometry || quns is QunsD3DFullScreen or QunsPresentation || (quns == QunsBusy && foregroundOnDockMonitor);
 }
 
-/// <summary>Durum değişikliğini, art arda <c>ticks</c> kez aynı görüldüğünde kabul eder (titreşmeyi önler).</summary>
+/// <summary>
+/// Durum değişikliğini art arda yeterince kez aynı görüldüğünde kabul eder (titreşmeyi önler).
+/// true'ya geçiş <c>onTicks</c>, false'a dönüş <c>offTicks</c> gözlem ister.
+/// </summary>
 public sealed class Debounce
 {
-    readonly int _ticks; int _count; bool _pending;
+    readonly int _on, _off; int _count; bool _pending;
     public bool State { get; private set; }
-    public Debounce(int ticks) { _ticks = Math.Max(1, ticks); }
+    public Debounce(int ticks) : this(ticks, ticks) { }
+    public Debounce(int onTicks, int offTicks) { _on = Math.Max(1, onTicks); _off = Math.Max(1, offTicks); }
 
     /// <summary>Yeni gözlem; kabul edilen durum değiştiyse true döner.</summary>
     public bool Observe(bool value)
     {
         if (value == State) { _count = 0; return false; }
         if (value != _pending) { _pending = value; _count = 0; }
-        if (++_count < _ticks) return false;
+        if (++_count < (value ? _on : _off)) return false;
         State = value; _count = 0;
         return true;
     }

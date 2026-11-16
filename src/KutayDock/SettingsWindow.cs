@@ -70,7 +70,7 @@ namespace KutayDock
             look.Children.Add(Label("Stil"));
             look.Children.Add(Pills(new[] { ("Cam", DockStyle.Cam), ("Siyah", DockStyle.Siyah), ("Gece", DockStyle.Gece), ("Beyaz", DockStyle.Beyaz) }, _s.Style, v => _s.Style = v));
             look.Children.Add(Label("Konum"));
-            look.Children.Add(Pills(new[] { ("Altta", DockEdge.Alt), ("Üstte", DockEdge.Ust) }, _s.Edge, v => _s.Edge = v));
+            look.Children.Add(Pills(new[] { ("Altta", DockEdge.Alt), ("Üstte", DockEdge.Ust), ("Solda", DockEdge.Sol), ("Sağda", DockEdge.Sag) }, _s.Edge, v => _s.Edge = v));
             look.Children.Add(Label("Boyut"));
             look.Children.Add(Pills(new[] { ("Küçük", 0.85), ("Orta", 1.0), ("Büyük", 1.15) }, _s.Scale, v => _s.Scale = v));
             look.Children.Add(Toggle("Tam genişlik", _s.FullWidth, v => _s.FullWidth = v));
@@ -135,7 +135,7 @@ namespace KutayDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.3.2 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.4 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }

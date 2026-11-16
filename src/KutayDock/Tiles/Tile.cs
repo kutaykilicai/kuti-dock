@@ -19,8 +19,10 @@ namespace KutayDock.Tiles
         protected Tile(Services s, Theme t, bool card = true)
         {
             S = s; T = t; K = s.Settings.Scale;
-            Height = 48 * K; Margin = new Thickness(2 * K, 0, 2 * K, 0);
-            VerticalAlignment = VerticalAlignment.Center;
+            Height = 48 * K;
+            // Dikey dock (Sol/Sağ): kartlar alt alta, aralık dikeyde
+            Margin = DockLayout.Vertical(s.Settings.Edge) ? new Thickness(0, 2 * K, 0, 2 * K) : new Thickness(2 * K, 0, 2 * K, 0);
+            VerticalAlignment = VerticalAlignment.Center; HorizontalAlignment = HorizontalAlignment.Center;
             if (card)
             {
                 CornerRadius = new CornerRadius(16 * K); Background = t.TileBg; BorderBrush = t.TileBorder;

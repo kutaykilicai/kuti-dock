@@ -8,7 +8,7 @@ namespace KutayDock
     /// <summary>Win32 çağrıları. Hepsi belgelenmiş, genel Windows API'leridir.</summary>
     internal static class Native
     {
-        public const int GWL_EXSTYLE = -20;
+        public const int GWL_STYLE = -16, GWL_EXSTYLE = -20;
         public const int WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_APPWINDOW = 0x40000;
         public const int SW_RESTORE = 9, SW_MINIMIZE = 6, SW_SHOW = 5;
         public const uint GW_OWNER = 4;
@@ -233,8 +233,14 @@ namespace KutayDock
             if (fg == IntPtr.Zero || fg == self || self == IntPtr.Zero) return false;
             if (!GetWindowRect(fg, out var r)) return false;
             if (!MonitorRect(fg, out var fgMon) || !MonitorRect(self, out var dockMon)) return false;
-            return KutayDock.Core.FullscreenRule.HidesDock(Box(r), fgMon, dockMon, IsZoomed(fg), ClassName(fg));
+            bool caption = (GetWindowLongPtr(fg, GWL_STYLE).ToInt64() & WS_CAPTION) == WS_CAPTION;
+            bool geometry = KutayDock.Core.FullscreenRule.HidesDock(Box(r), fgMon, dockMon, IsZoomed(fg), ClassName(fg), caption);
+            int quns = SHQueryUserNotificationState(out var q) == 0 ? q : 0;
+            return KutayDock.Core.FullscreenRule.Decide(geometry, quns, fgMon == dockMon && !ShellClasses.Contains(ClassName(fg)));
         }
+
+        [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
+        const long WS_CAPTION = 0x00C00000;
 
         static KutayDock.Core.Box Box(RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);
 

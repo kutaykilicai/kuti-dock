@@ -14,12 +14,14 @@ namespace KutayDock.Tiles
     internal static class Pop
     {
         /// <summary>Kartın üstünde açılan küçük koyu panel; dışarı tıklanınca kapanır.</summary>
-        public static Popup Make(FrameworkElement target, UIElement content, bool top)
+        public static Popup Make(FrameworkElement target, UIElement content, DockEdge edge)
         {
             var p = new Popup
             {
-                PlacementTarget = target, Placement = top ? PlacementMode.Bottom : PlacementMode.Top, StaysOpen = false,
-                AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, VerticalOffset = top ? 8 : -8,
+                PlacementTarget = target, Placement = Placement(edge), StaysOpen = false,
+                AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade,
+                VerticalOffset = edge switch { DockEdge.Ust => 8, DockEdge.Alt => -8, _ => 0 },
+                HorizontalOffset = edge switch { DockEdge.Sol => 8, DockEdge.Sag => -8, _ => 0 },
                 Child = new Border
                 {
                     Background = Theme.B("#F21C1C1F"), BorderBrush = Theme.B("#33FFFFFF"), BorderThickness = new Thickness(1),
@@ -28,6 +30,15 @@ namespace KutayDock.Tiles
             };
             return p;
         }
+
+        /// <summary>Dock'tan ekranın içine doğru açılma yönü (panel, sağ tık menüsü).</summary>
+        public static PlacementMode Placement(DockEdge edge) => edge switch
+        {
+            DockEdge.Ust => PlacementMode.Bottom,
+            DockEdge.Sol => PlacementMode.Right,
+            DockEdge.Sag => PlacementMode.Left,
+            _ => PlacementMode.Top,
+        };
 
         public static Border Link(string text, Action a)
         {
@@ -136,7 +147,7 @@ namespace KutayDock.Tiles
             links.Children.Add(Pop.Link("Değerleri gir…", () => { _popup.IsOpen = false; _openSettings(); }));
             p.Children.Add(links);
             if (_popup != null) _popup.IsOpen = false;
-            _popup = Pop.Make(this, p, S.Settings.Edge == DockEdge.Ust);
+            _popup = Pop.Make(this, p, S.Settings.Edge);
             _popup.IsOpen = true;
         }
 
@@ -234,7 +245,7 @@ namespace KutayDock.Tiles
             }
             p.Children.Add(Pop.Link("Depolama ayarları", () => { _popup.IsOpen = false; Run("ms-settings:storagesense"); }));
             if (_popup != null) _popup.IsOpen = false;
-            _popup = Pop.Make(this, p, S.Settings.Edge == DockEdge.Ust);
+            _popup = Pop.Make(this, p, S.Settings.Edge);
             _popup.MinWidth = 300;
             _popup.IsOpen = true;
         }

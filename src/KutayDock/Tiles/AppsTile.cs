@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using KutayDock.Core;
 
 namespace KutayDock.Tiles
 {
@@ -31,6 +32,11 @@ namespace KutayDock.Tiles
         public AppsTile(Services s, Theme t, Func<IntPtr> self) : base(s, t, card: false)
         {
             _self = self; Child = _panel; Height = 48 * K;
+            if (DockLayout.Vertical(s.Settings.Edge))
+            {
+                _panel.Orientation = Orientation.Vertical; _panel.HorizontalAlignment = HorizontalAlignment.Center;
+                Height = double.NaN; Width = 50 * K;
+            }
         }
 
         static string PinnedDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -108,13 +114,22 @@ namespace KutayDock.Tiles
             UIElement icon = img;
             var scale = new ScaleTransform(1, 1);
             FrameworkElement outer = null;
-            var iconHost = new Border { Child = icon, RenderTransform = scale, RenderTransformOrigin = new Point(0.5, 0.75) };
+            var edge = S.Settings.Edge;
+            var (ox, oy) = DockLayout.ZoomOrigin(edge); // büyüme ekranın içine doğru
+            var iconHost = new Border { Child = icon, RenderTransform = scale, RenderTransformOrigin = new Point(ox, oy) };
             var dot = new Border
             {
                 Width = (active ? 10 : 4) * K, Height = 4 * K, CornerRadius = new CornerRadius(2 * K), Background = Theme.Accent,
                 VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 1 * K),
                 Visibility = item.Windows.Count > 0 ? Visibility.Visible : Visibility.Hidden,
             };
+            if (DockLayout.Vertical(edge))
+            {
+                // Dikey dock: çalışma noktası dock'un dış kenarında, dikey çizgi
+                dot.Width = 4 * K; dot.Height = (active ? 10 : 4) * K; dot.VerticalAlignment = VerticalAlignment.Center;
+                dot.HorizontalAlignment = edge == DockEdge.Sol ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                dot.Margin = edge == DockEdge.Sol ? new Thickness(1 * K, 0, 0, 0) : new Thickness(0, 0, 1 * K, 0);
+            }
             bool card = item.Windows.Count == 0; // sitedeki gibi: çalışmayan sabitlenmiş uygulama kendi kartında
             if (card) size = 39 * K;
             var grid = new Grid { Width = size, Height = (card ? 39 : 46) * K };
@@ -130,7 +145,8 @@ namespace KutayDock.Tiles
                 outer = new Border
                 {
                     Width = 50 * K, Height = 48 * K, CornerRadius = new CornerRadius(16 * K), Background = T.TileBg, BorderBrush = T.TileBorder,
-                    BorderThickness = new Thickness(1), Margin = new Thickness(2 * K, 0, 2 * K, 0), Child = btn, Tag = item,
+                    BorderThickness = new Thickness(1), Child = btn, Tag = item,
+                    Margin = DockLayout.Vertical(edge) ? new Thickness(0, 2 * K, 0, 2 * K) : new Thickness(2 * K, 0, 2 * K, 0),
                 };
             }
             // Üzerine gelince büyüme (macOS dock hissi, kart sınırları içinde)
@@ -165,7 +181,7 @@ namespace KutayDock.Tiles
         void Preview(AppItem it, FrameworkElement anchor)
         {
             if (it.Windows.Count == 0) return;
-            WindowPreview.Open(it.Key, it.Windows, img(it) ?? ShellIcons.Generic, anchor, S.Settings.Edge == KutayDock.Core.DockEdge.Ust);
+            WindowPreview.Open(it.Key, it.Windows, img(it) ?? ShellIcons.Generic, anchor, S.Settings.Edge);
         }
 
         static void Launch(AppItem it)
@@ -201,7 +217,7 @@ namespace KutayDock.Tiles
                 m.Items.Add(c);
             }
             m.PlacementTarget = target;
-            m.Placement = S.Settings.Edge == KutayDock.Core.DockEdge.Ust ? System.Windows.Controls.Primitives.PlacementMode.Bottom : System.Windows.Controls.Primitives.PlacementMode.Top;
+            m.Placement = Pop.Placement(S.Settings.Edge);
             m.IsOpen = true;
         }
 

@@ -291,6 +291,86 @@ public class FloatingDefaultsTests
     }
 }
 
+public class VideoFullscreenTests
+{
+    static readonly Box Main = new(0, 0, 2560, 1440), Left = new(-1920, 272, 0, 1352);
+
+    [Fact]
+    public void ChromeHtml5FullscreenHides()
+    {
+        // Chrome/YouTube tam ekranı: başlık ve kenarlık kalkar, pencere monitörü tam kaplar (büyütülmüş durumdan girse de)
+        Assert.True(FullscreenRule.HidesDock(Main, Main, Main, false, "Chrome_WidgetWin_1", hasCaption: false));
+        Assert.True(FullscreenRule.HidesDock(Main, Main, Main, true, "Chrome_WidgetWin_1", hasCaption: false));
+    }
+
+    [Fact]
+    public void MaximizedChromeWithCaptionDoesNotHide() =>
+        // Kasa'da ölçülen: büyütülmüş Chrome -8,-8,2568,1448, başlık stili var
+        Assert.False(FullscreenRule.HidesDock(new Box(-8, -8, 2568, 1448), Main, Main, true, "Chrome_WidgetWin_1", hasCaption: true));
+
+    [Fact]
+    public void WindowsSignals()
+    {
+        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsD3DFullScreen, false));  // D3D tam ekran video/oyun
+        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsPresentation, false));   // sunum modu
+        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsBusy, true));            // tam ekran uygulama, dock ekranında
+        Assert.False(FullscreenRule.Decide(false, FullscreenRule.QunsBusy, false));          // başka ekranda: gizleme
+        Assert.False(FullscreenRule.Decide(false, 5, true));                                 // QUNS_ACCEPTS_NOTIFICATIONS (normal)
+        Assert.True(FullscreenRule.Decide(true, 5, true));
+    }
+
+    [Fact]
+    public void FastHideSlowShow()
+    {
+        var d = new Debounce(2, 8); // 250 ms tık: 0,5 sn'de gizle, 2 sn'de göster
+        Assert.False(d.Observe(true)); Assert.True(d.Observe(true));
+        for (int i = 0; i < 7; i++) Assert.False(d.Observe(false));
+        Assert.True(d.Observe(false)); Assert.False(d.State);
+    }
+}
+
+public class DockLayoutTests
+{
+    // Kasa ana ekranı (WPF birimi = piksel, ölçek 1)
+    const double X = 0, Y = 0, W = 2560, H = 1440;
+
+    [Fact]
+    public void EdgesPlaceDock()
+    {
+        Assert.Equal((1030.0, 1378.0), DockLayout.Position(DockEdge.Alt, X, Y, W, H, 500, 54, 8));
+        Assert.Equal((1030.0, 8.0), DockLayout.Position(DockEdge.Ust, X, Y, W, H, 500, 54, 8));
+        Assert.Equal((8.0, 470.0), DockLayout.Position(DockEdge.Sol, X, Y, W, H, 58, 500, 8));   // dikey ortalı
+        Assert.Equal((2494.0, 470.0), DockLayout.Position(DockEdge.Sag, X, Y, W, H, 58, 500, 8));
+        Assert.True(DockLayout.Vertical(DockEdge.Sol) && DockLayout.Vertical(DockEdge.Sag));
+        Assert.False(DockLayout.Vertical(DockEdge.Alt) || DockLayout.Vertical(DockEdge.Ust));
+    }
+
+    [Fact]
+    public void PopupOpensInward()
+    {
+        // Düğme 50x46; panel 480x170, aralık 10
+        Assert.Equal((775.0, 830.0), DockLayout.Popup(DockEdge.Alt, 990, 1010, 50, 46, 480, 170, 10, X, Y, W, H));
+        Assert.Equal((775.0, 1066.0), DockLayout.Popup(DockEdge.Ust, 990, 1010, 50, 46, 480, 170, 10, X, Y, W, H));
+        Assert.Equal((70.0, 599.0), DockLayout.Popup(DockEdge.Sol, 10, 661, 50, 46, 480, 170, 10, X, Y, W, H));   // sağa açılır
+        Assert.Equal((2010.0, 599.0), DockLayout.Popup(DockEdge.Sag, 2500, 661, 50, 46, 480, 170, 10, X, Y, W, H)); // sola açılır
+    }
+
+    [Fact]
+    public void PopupStaysOnScreen()
+    {
+        Assert.Equal(4.0, DockLayout.Popup(DockEdge.Alt, 0, 1380, 50, 46, 480, 170, 10, X, Y, W, H).X);
+        Assert.Equal(H - 170 - 4, DockLayout.Popup(DockEdge.Sol, 10, 1400, 50, 30, 480, 170, 10, X, Y, W, H).Y);
+    }
+
+    [Fact]
+    public void ZoomGrowsInward()
+    {
+        Assert.Equal((0.5, 0.75), DockLayout.ZoomOrigin(DockEdge.Alt));
+        Assert.Equal((0.25, 0.5), DockLayout.ZoomOrigin(DockEdge.Sol));
+        Assert.Equal((0.75, 0.5), DockLayout.ZoomOrigin(DockEdge.Sag));
+    }
+}
+
 public class ThumbTests
 {
     [Fact]

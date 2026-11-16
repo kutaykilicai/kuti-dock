@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using KutayDock.Core;
 
 namespace KutayDock.Tiles
 {
@@ -38,20 +39,20 @@ namespace KutayDock.Tiles
         public static void CloseCurrent() { _current?.Close(); _current = null; }
 
         /// <summary>Paneli düğmenin üstünde (dock üstteyse altında) açar.</summary>
-        public static void Open(object key, IReadOnlyList<IntPtr> windows, ImageSource icon, FrameworkElement anchor, bool below)
+        public static void Open(object key, IReadOnlyList<IntPtr> windows, ImageSource icon, FrameworkElement anchor, DockEdge edge)
         {
             if (IsOpenFor(key)) return;
             CloseCurrent();
             var alive = windows.Where(Native.IsWindowVisible).ToList();
             if (alive.Count == 0) return;
-            _current = new WindowPreview(key, alive, icon, anchor, below);
+            _current = new WindowPreview(key, alive, icon, anchor, edge);
             _current.Show();
         }
 
         const double CardW = 236, ThumbH = 132;
         readonly object _key;
         readonly FrameworkElement _anchor;
-        readonly bool _below;
+        readonly DockEdge _edge;
         readonly ImageSource _icon;
         readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
         readonly List<(IntPtr src, Border slot, IntPtr thumb)> _thumbs = new();
@@ -60,9 +61,9 @@ namespace KutayDock.Tiles
         IntPtr _hwnd;
         int _outside;
 
-        WindowPreview(object key, List<IntPtr> windows, ImageSource icon, FrameworkElement anchor, bool below)
+        WindowPreview(object key, List<IntPtr> windows, ImageSource icon, FrameworkElement anchor, DockEdge edge)
         {
-            _key = key; _windows = windows; _icon = icon; _anchor = anchor; _below = below;
+            _key = key; _windows = windows; _icon = icon; _anchor = anchor; _edge = edge;
             // DWM önizlemesi katmanlı (AllowsTransparency) pencerelerde çizilmez; köşeleri DWM yuvarlatır.
             WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Topmost = true;
             ShowActivated = false; SizeToContent = SizeToContent.WidthAndHeight;
@@ -180,15 +181,13 @@ namespace KutayDock.Tiles
         {
             if (!_anchor.IsVisible) return;
             var a = _anchor.PointToScreen(new Point(0, 0));
+            var b = _anchor.PointToScreen(new Point(_anchor.ActualWidth, _anchor.ActualHeight)); // kompakt görünümde ölçekli boyut
             var dpi = VisualTreeHelper.GetDpi(this);
-            double ax = a.X / dpi.DpiScaleX, ay = a.Y / dpi.DpiScaleY;
-            double w = ActualWidth, h = ActualHeight;
+            double ax = a.X / dpi.DpiScaleX, ay = a.Y / dpi.DpiScaleY, aw = (b.X - a.X) / dpi.DpiScaleX, ah = (b.Y - a.Y) / dpi.DpiScaleY;
             var wa = SystemParameters.VirtualScreenWidth > 0
                 ? new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight)
                 : SystemParameters.WorkArea;
-            double left = ax + _anchor.ActualWidth / 2 - w / 2;
-            Left = Math.Max(wa.Left + 4, Math.Min(left, wa.Right - w - 4));
-            Top = _below ? ay + _anchor.ActualHeight + 10 : ay - h - 10;
+            (Left, Top) = DockLayout.Popup(_edge, ax, ay, aw, ah, ActualWidth, ActualHeight, 10, wa.X, wa.Y, wa.Width, wa.Height);
         }
 
         void Watch()
