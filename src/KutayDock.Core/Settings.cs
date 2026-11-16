@@ -22,7 +22,7 @@ public sealed class Settings
     public bool FullWidth { get; set; } = false;
     public double Scale { get; set; } = 1.0;
     /// <summary>Pencereler dock'un altına girmesin diye ekran alanı ayır.</summary>
-    public bool ReserveSpace { get; set; } = true;
+    public bool ReserveSpace { get; set; } = false;
     /// <summary>Windows görev çubuğunu otomatik gizle. Varsayılan KAPALI.</summary>
     public bool AutoHideWindowsTaskbar { get; set; } = false;
     /// <summary>Tam ekran oyun/video varken dock'u gizle.</summary>
@@ -80,7 +80,19 @@ public sealed class Settings
     /// <summary>1.0 ayarlarını 1.1'e taşır: kaldırılan widget'lar çıkar, Depolama ve Ekran görüntüsü eklenir.</summary>
     public Settings Migrate()
     {
-        if (Version >= 2) return this;
+        if (Version < 2) MigrateWidgets();
+        if (Version < 3)
+        {
+            // 1.3.2: RocketDock gibi yüzen dock; ekranda yer ayırma ve tam genişlik varsayılan kapalı
+            ReserveSpace = false;
+            FullWidth = false;
+            Version = 3;
+        }
+        return this;
+    }
+
+    void MigrateWidgets()
+    {
         Widgets.RemoveAll(w => w is "media" or "screentime" or "calendar");
         int at = Widgets.IndexOf("battery");
         if (at < 0) at = Widgets.IndexOf("clock");
@@ -88,7 +100,6 @@ public sealed class Settings
         foreach (var w in new[] { "screenshot", "storage" })
             if (!Widgets.Contains(w)) Widgets.Insert(at, w);
         Version = 2;
-        return this;
     }
 
     public void Save(string path)

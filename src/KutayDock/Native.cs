@@ -106,6 +106,8 @@ namespace KutayDock
         // AppBar (ekranda alan ayırma, görev çubuğu otomatik gizleme)
         [StructLayout(LayoutKind.Sequential)]
         public struct APPBARDATA { public int cbSize; public IntPtr hWnd; public uint uCallbackMessage; public uint uEdge; public RECT rc; public IntPtr lParam; }
+        [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint action, uint param, ref RECT rc, uint winIni);
+        public const uint SPI_SETWORKAREA = 0x2F, SPIF_SENDCHANGE = 0x2;
         [DllImport("shell32.dll")] public static extern UIntPtr SHAppBarMessage(uint msg, ref APPBARDATA d);
         public const uint ABM_NEW = 0, ABM_REMOVE = 1, ABM_QUERYPOS = 2, ABM_SETPOS = 3, ABM_GETSTATE = 4, ABM_SETSTATE = 10;
         public const uint ABE_TOP = 1, ABE_BOTTOM = 3;

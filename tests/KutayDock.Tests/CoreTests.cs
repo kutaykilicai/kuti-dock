@@ -244,6 +244,53 @@ public class CursorShapeTests
     }
 }
 
+public class WorkAreaTests
+{
+    static readonly Box Main = new(0, 0, 2560, 1440), Left = new(-1920, 272, 0, 1352);
+
+    [Fact]
+    public void HiddenTaskbarLeavesNoStrip()
+    {
+        Assert.Equal(Main, WorkArea.WhileTaskbarHidden(Main, null));   // Kasa: alttaki 48 px geri gelir
+        Assert.Equal(Left, WorkArea.WhileTaskbarHidden(Left, null));
+    }
+
+    [Fact]
+    public void DockReserveIsKeptWhenEnabled() =>
+        Assert.Equal(new Box(0, 70, 2560, 1440), WorkArea.WhileTaskbarHidden(Main, new Box(0, 0, 2560, 70)));
+
+    [Fact]
+    public void SubtractBarOnAnyEdge()
+    {
+        Assert.Equal(new Box(0, 0, 2560, 1392), WorkArea.Subtract(Main, new Box(0, 1392, 2560, 1440), Main)); // alt
+        Assert.Equal(new Box(0, 48, 2560, 1440), WorkArea.Subtract(Main, new Box(0, 0, 2560, 48), Main));     // üst
+        Assert.Equal(new Box(48, 0, 2560, 1440), WorkArea.Subtract(Main, new Box(0, 0, 48, 1440), Main));     // sol
+        Assert.Equal(new Box(-1920, 272, 0, 1304), WorkArea.Subtract(Left, new Box(-1920, 1304, 0, 1352), Left)); // ikincil
+        Assert.Equal(Main, WorkArea.Subtract(Main, new Box(-1920, 1304, 0, 1352), Main)); // başka monitördeki çubuk
+    }
+}
+
+public class FloatingDefaultsTests
+{
+    [Fact]
+    public void NewSettingsFloat()
+    {
+        var s = new Settings().Migrate();
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(3, s.Version);
+    }
+
+    [Fact]
+    public void ExistingSettingsMigratedToFloating()
+    {
+        var s = new Settings { ReserveSpace = true, FullWidth = true, Version = 2 };
+        var w = s.Widgets.ToList();
+        s.Migrate();
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(w, s.Widgets);
+        s.ReserveSpace = true; s.Migrate();          // kullanıcı sonradan açarsa kalıcı
+        Assert.True(s.ReserveSpace);
+    }
+}
+
 public class ThumbTests
 {
     [Fact]
@@ -307,7 +354,7 @@ public class MigrationTests
         var s = Settings.Load(p);
         Assert.Equal(DockStyle.Siyah, s.Style);
         Assert.Equal(new[] { "start", "apps", "ai", "volume", "storage", "screenshot", "battery", "clock" }, s.Widgets);
-        Assert.Equal(2, s.Version);
+        Assert.Equal(3, s.Version);
         // 1.1 dosyası tekrar taşınmaz: kullanıcı Depolama'yı kapattıysa geri gelmez
         s.Widgets.Remove("storage"); s.Save(p);
         Assert.DoesNotContain("storage", Settings.Load(p).Widgets);

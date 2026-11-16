@@ -25,6 +25,30 @@ public static class TaskbarGeometry
     }
 }
 
+public static class WorkArea
+{
+    /// <summary>
+    /// <paramref name="area"/>'dan, monitörün bir kenarına yapışık <paramref name="bar"/> şeridini çıkarır
+    /// (görev çubuğu ya da dock'un ayırdığı alan). Kesişmiyorsa alan değişmez.
+    /// </summary>
+    public static Box Subtract(Box area, Box bar, Box mon)
+    {
+        if (bar.Right <= area.Left || bar.Left >= area.Right || bar.Bottom <= area.Top || bar.Top >= area.Bottom) return area;
+        bool horizontal = bar.Right - bar.Left >= bar.Bottom - bar.Top;
+        if (horizontal)
+            return Math.Abs(bar.Top - mon.Top) <= Math.Abs(mon.Bottom - bar.Bottom)
+                ? area with { Top = Math.Max(area.Top, bar.Bottom) }
+                : area with { Bottom = Math.Min(area.Bottom, bar.Top) };
+        return Math.Abs(bar.Left - mon.Left) <= Math.Abs(mon.Right - bar.Right)
+            ? area with { Left = Math.Max(area.Left, bar.Right) }
+            : area with { Right = Math.Min(area.Right, bar.Left) };
+    }
+
+    /// <summary>Görev çubuğu gizliyken olması gereken çalışma alanı: monitörün tamamı, varsa yalnızca dock'un ayırdığı alan çıkar.</summary>
+    public static Box WhileTaskbarHidden(Box mon, Box? dockReserve) =>
+        dockReserve is { } d ? Subtract(mon, d, mon) : mon;
+}
+
 public static class Thumb
 {
     /// <summary>Kaynak en-boy oranını koruyarak kutuya sığdır ve ortala (x, y, genişlik, yükseklik).</summary>

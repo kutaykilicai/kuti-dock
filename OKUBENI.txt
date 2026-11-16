@@ -8,6 +8,12 @@ Ne bu?
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
 1.3.2'DE NE DEĞİŞTİ
+  + RocketDock gibi yüzen dock: varsayılan olarak ekranda yer ayırmaz, tam
+    genişlik değildir; içeriği kadar genişlikte, ortada, pencerelerin üstünde
+    durur. Mevcut ayarlarda da kapatıldı (Ayarlar'dan "Ekranda dock için yer
+    ayır" istenirse açılabilir).
+  + Görev çubuğunu gizleme yedek yolu artık 48 px boş şerit bırakmaz: çubuk
+    gizliyken çalışma alanı ekranın tamamıdır; çıkışta geri verilir.
   + Düzeltme: "Cursor ile giriş yap" sonrası belirteç kaydedilmiyordu. Tek bir
     ağ hatası/zaman aşımı girişi bitiriyordu; artık art arda 3 hatada durur,
     bekleme 15 dk. Oturum geçersizse cursor.com'un giriş sayfasına yönlendirmesi

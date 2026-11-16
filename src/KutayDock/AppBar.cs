@@ -26,6 +26,7 @@ namespace KutayDock
             if (top) d.rc.Bottom = d.rc.Top + heightPx; else d.rc.Top = d.rc.Bottom - heightPx;
             Native.SHAppBarMessage(Native.ABM_SETPOS, ref d);
             _rc = d.rc;
+            DockReserve = B(_rc);
         }
 
         (double x, double y) Dpi()
@@ -43,6 +44,7 @@ namespace KutayDock
         {
             if (!_registered) return;
             var d = Data(); Native.SHAppBarMessage(Native.ABM_REMOVE, ref d); _registered = false;
+            DockReserve = null;
         }
 
         // ---- Windows görev çubuğu ----
@@ -56,6 +58,9 @@ namespace KutayDock
         static System.Windows.Threading.DispatcherTimer _poll;
         static readonly System.Collections.Generic.HashSet<IntPtr> _hiddenBars = new();
         static bool _revealed;
+        /// <summary>Dock'un AppBar ile ayırdığı alan (piksel); ayırma kapalıysa null.</summary>
+        static KutayDock.Core.Box? DockReserve;
+        static DateTime _lastReclaim;
 
         static Native.APPBARDATA TrayData() => new() { cbSize = Marshal.SizeOf<Native.APPBARDATA>(), hWnd = Native.FindWindow("Shell_TrayWnd", null) };
         static int GetState() { var d = TrayData(); return (int)Native.SHAppBarMessage(Native.ABM_GETSTATE, ref d).ToUInt32(); }
@@ -101,6 +106,7 @@ namespace KutayDock
         {
             _fallback = true;
             HideBars();
+            ReclaimWorkArea();
             _poll ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             _poll.Tick -= Poll; _poll.Tick += Poll;
             _poll.Start();
@@ -112,6 +118,10 @@ namespace KutayDock
             _fallback = false; _poll?.Stop();
             foreach (var h in _hiddenBars) Native.ShowWindow(h, Native.SW_SHOWNA);
             _hiddenBars.Clear(); _revealed = false;
+            // Görev çubuklarının alanını geri ver (Explorer kendisi yeniden hesaplamayabilir)
+            foreach (var h in Taskbars())
+                if (Native.GetWindowRect(h, out var r) && Monitor(h, out var mon, out var work))
+                    SetWork(work, KutayDock.Core.WorkArea.Subtract(KutayDock.Core.WorkArea.WhileTaskbarHidden(mon, DockReserve), B(r), mon));
         }
 
         static void HideBars()
@@ -119,6 +129,32 @@ namespace KutayDock
             foreach (var h in Taskbars())
                 if (Native.IsWindowVisible(h)) { Native.ShowWindow(h, Native.SW_HIDE); _hiddenBars.Add(h); }
             _revealed = false;
+        }
+
+        /// <summary>
+        /// Gizlenen görev çubuğu, gizli pencere olsa da ekranda alanını (48 px) ayırmaya devam eder; büyütülen pencereler
+        /// boş bir şerit bırakır. Gizliyken her monitörün çalışma alanı monitörün tamamına (eksi dock'un ayırdığı alan) çekilir.
+        /// </summary>
+        static void ReclaimWorkArea()
+        {
+            foreach (var h in Taskbars())
+                if (Monitor(h, out var mon, out var work))
+                    SetWork(work, KutayDock.Core.WorkArea.WhileTaskbarHidden(mon, DockReserve));
+        }
+
+        static bool Monitor(IntPtr h, out KutayDock.Core.Box mon, out KutayDock.Core.Box work)
+        {
+            var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf<Native.MONITORINFO>() };
+            bool ok = Native.GetMonitorInfo(Native.MonitorFromWindow(h, 2), ref mi);
+            mon = B(mi.rcMonitor); work = B(mi.rcWork);
+            return ok;
+        }
+
+        static void SetWork(KutayDock.Core.Box current, KutayDock.Core.Box want)
+        {
+            if (current == want) return;
+            var rc = new Native.RECT { Left = want.Left, Top = want.Top, Right = want.Right, Bottom = want.Bottom };
+            Native.SystemParametersInfo(Native.SPI_SETWORKAREA, 0, ref rc, Native.SPIF_SENDCHANGE);
         }
 
         static KutayDock.Core.Box B(Native.RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);
@@ -149,6 +185,8 @@ namespace KutayDock
                 // Explorer bir çubuğu kendiliğinden geri gösterirse (ör. yeni monitör) tekrar gizle
                 foreach (var h in bars) if (Native.IsWindowVisible(h)) { Native.ShowWindow(h, Native.SW_HIDE); _hiddenBars.Add(h); }
                 _revealed = false;
+                // Explorer alanı geri alırsa yeniden ayarla; ayar yayını sık olmasın diye en çok saniyede bir
+                if (DateTime.Now - _lastReclaim > TimeSpan.FromSeconds(1)) { _lastReclaim = DateTime.Now; ReclaimWorkArea(); }
             }
         }
     }
