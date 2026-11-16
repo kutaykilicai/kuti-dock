@@ -70,11 +70,17 @@ namespace KutayDock.Tiles
                 Native.GetWindowThreadProcessId(h, out uint pid);
                 var path = Native.ProcessPath(pid);
                 if (path == null) continue;
-                if (Path.GetFileName(path).Equals("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) path = "uwp:" + Native.WindowTitle(h);
-                var key = path.ToLowerInvariant();
+                // Paketli uygulamalar (Ayarlar, Not Defteri vb.): simge ve başlatma AppUserModelID ile.
+                // Eskiden ApplicationFrameHost pencereleri simgesiz kalıp baş harf ("A") gösteriliyordu.
+                bool frame = Path.GetFileName(path).Equals("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase);
+                string aumid = frame || path.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) ? Native.AppUserModelId(h) : null;
+                string key, name, launch, icon;
+                if (aumid != null) { key = "aumid:" + aumid.ToLowerInvariant(); launch = icon = @"shell:AppsFolder\" + aumid; name = frame ? Native.WindowTitle(h) : Services.AppName(path); }
+                else if (frame) continue; // kimliği çözülemeyen boş UWP çerçevesi (askıdaki uygulama) gösterilmez
+                else { key = path.ToLowerInvariant(); launch = icon = path; name = Services.AppName(path); }
                 if (!byKey.TryGetValue(key, out var it))
                 {
-                    it = new AppItem { Key = key, Name = path.StartsWith("uwp:") ? path[4..] : Services.AppName(path), Launch = path.StartsWith("uwp:") ? null : path, IconPath = path.StartsWith("uwp:") ? null : path };
+                    it = new AppItem { Key = key, Name = name, Launch = launch, IconPath = icon };
                     byKey[key] = it; items.Add(it);
                 }
                 it.Windows.Add(h);
@@ -136,23 +142,18 @@ namespace KutayDock.Tiles
             btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; Zoom(1.22); };
             btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; Zoom(1.0); };
             btn.PreviewMouseLeftButtonDown += (_, _) => Zoom(1.05);
-            btn.MouseLeftButtonUp += (_, e) => { Zoom(1.22); Click((AppItem)outer.Tag); e.Handled = true; };
+            btn.MouseLeftButtonUp += (_, e) => { Zoom(1.22); Click((AppItem)outer.Tag, btn); e.Handled = true; };
             btn.MouseRightButtonUp += (_, e) => { Menu((AppItem)outer.Tag, btn); e.Handled = true; };
             return outer;
         }
 
-        void Click(AppItem it)
+        void Click(AppItem it, FrameworkElement target)
         {
             var alive = it.Windows.Where(Native.IsWindowVisible).ToList();
             if (alive.Count == 0) { Launch(it); return; }
+            if (alive.Count > 1) { Menu(it, target, chooser: true); return; } // birden çok pencere: hangisi?
             var fg = Native.GetForegroundWindow();
-            int idx = alive.IndexOf(fg);
-            if (idx >= 0)
-            {
-                // Birden çok pencere varsa sıradakine geç, tek pencere ise küçült.
-                if (alive.Count > 1) Native.Activate(alive[(idx + 1) % alive.Count]);
-                else Native.ShowWindow(fg, Native.SW_MINIMIZE);
-            }
+            if (alive[0] == fg) Native.ShowWindow(fg, Native.SW_MINIMIZE);
             else Native.Activate(alive[0]);
             _signature = ""; // aktif göstergesini tazele
         }
@@ -163,14 +164,18 @@ namespace KutayDock.Tiles
             try { Process.Start(new ProcessStartInfo(it.Launch) { UseShellExecute = true }); } catch (Exception) { }
         }
 
-        void Menu(AppItem it, FrameworkElement target)
+        /// <summary>Pencere listesi. chooser: sol tıkta açılan seçim listesi (kapatma seçeneği yok).</summary>
+        void Menu(AppItem it, FrameworkElement target, bool chooser = false)
         {
             var m = new ContextMenu();
-            foreach (var h in it.Windows)
+            var fg = Native.GetForegroundWindow();
+            var wins = it.Windows.Where(Native.IsWindowVisible).ToList();
+            foreach (var h in wins)
             {
                 var title = Native.WindowTitle(h);
-                var mi = new MenuItem { Header = title.Length > 60 ? title[..60] + "…" : title };
-                mi.Click += (_, _) => Native.Activate(h);
+                var mi = new MenuItem { Header = title.Length > 60 ? title[..60] + "…" : title, FontWeight = h == fg ? FontWeights.SemiBold : FontWeights.Normal };
+                if (img(it) is { } src) mi.Icon = new Image { Source = src, Width = 16, Height = 16 };
+                mi.Click += (_, _) => { Native.Activate(h); _signature = ""; };
                 m.Items.Add(mi);
             }
             if (it.Windows.Count > 0) m.Items.Add(new Separator());
@@ -179,13 +184,17 @@ namespace KutayDock.Tiles
                 var n = new MenuItem { Header = it.Windows.Count > 0 ? "Yeni pencere" : "Aç" };
                 n.Click += (_, _) => Launch(it); m.Items.Add(n);
             }
-            if (it.Windows.Count > 0)
+            if (it.Windows.Count > 0 && !chooser)
             {
                 var c = new MenuItem { Header = it.Windows.Count > 1 ? "Tüm pencereleri kapat" : "Pencereyi kapat" };
                 c.Click += (_, _) => { foreach (var h in it.Windows) Native.PostMessage(h, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero); };
                 m.Items.Add(c);
             }
-            m.PlacementTarget = target; m.IsOpen = true;
+            m.PlacementTarget = target;
+            m.Placement = S.Settings.Edge == KutayDock.Core.DockEdge.Ust ? System.Windows.Controls.Primitives.PlacementMode.Bottom : System.Windows.Controls.Primitives.PlacementMode.Top;
+            m.IsOpen = true;
         }
+
+        static ImageSource img(AppItem it) => it.IconPath == null ? null : ShellIcons.Get(it.IconPath);
     }
 }

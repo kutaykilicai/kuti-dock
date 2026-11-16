@@ -26,13 +26,12 @@ public static class Format
         return (bytesPerSec / 1024 / 1024 / 1024).ToString("0.00", Tr) + " GB/s";
     }
 
-    /// <summary>12.345.678 → "12,3M".</summary>
-    public static string Tokens(long n)
+    /// <summary>Bayt → "245 GB", "1,8 TB".</summary>
+    public static string Bytes(long b)
     {
-        if (n < 1000) return n.ToString(Tr);
-        if (n < 1_000_000) return (n / 1000d).ToString("0.#", Tr) + "B";
-        if (n < 1_000_000_000) return (n / 1_000_000d).ToString("0.#", Tr) + "M";
-        return (n / 1_000_000_000d).ToString("0.##", Tr) + "Mr";
+        double v = b; string[] u = { "B", "KB", "MB", "GB", "TB" }; int i = 0;
+        while (v >= 1024 && i < u.Length - 1) { v /= 1024; i++; }
+        return (i >= 3 && v < 10 ? v.ToString("0.0", Tr) : v.ToString("0", Tr)) + " " + u[i];
     }
 
     public static double Clamp01(double v) => v < 0 ? 0 : v > 1 ? 1 : v;

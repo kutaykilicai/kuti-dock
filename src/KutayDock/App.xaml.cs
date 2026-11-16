@@ -25,6 +25,7 @@ namespace KutayDock
             DispatcherUnhandledException += (_, ex) => { Log(ex.Exception); ex.Handled = true; };
             AppDomain.CurrentDomain.UnhandledException += (_, ex) => { Log(ex.ExceptionObject as Exception); AppBar.RestoreTaskbar(); };
 
+            AppBar.ShowAllTaskbars();
             var settings = Settings.Load(SettingsPath);
             if (!File.Exists(SettingsPath)) { try { settings.Save(SettingsPath); } catch (Exception) { } }
             _services = new Services(settings);

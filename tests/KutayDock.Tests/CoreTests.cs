@@ -20,154 +20,126 @@ public class FormatTests
     }
 
     [Fact]
-    public void Tokens() { Assert.Equal("48,1M", Format.Tokens(48_100_000)); Assert.Equal("950", Format.Tokens(950)); }
+    public void Bytes()
+    {
+        Assert.Equal("245 GB", Format.Bytes(245L * 1024 * 1024 * 1024));
+        Assert.Equal("1,8 TB", Format.Bytes((long)(1.8 * 1024 * 1024 * 1024 * 1024)));
+        Assert.Equal("512 MB", Format.Bytes(512L * 1024 * 1024));
+    }
 
     [Fact]
     public void Cpu() => Assert.Equal(25.0, Format.CpuPercent(0, 0, 0, 750, 800, 200));
 }
 
-public class IcsTests
+public class LimitsTests
 {
-    static readonly TimeZoneInfo Ist = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
-
-    const string Sample = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20261116T113000Z\r\nDTEND:20261116T130000Z\r\nSUMMARY:Calculus\r\n  lecture\r\nEND:VEVENT\r\n" +
-        "BEGIN:VEVENT\r\nDTSTART;TZID=Europe/Istanbul:20261102T100000\r\nDTEND;TZID=Europe/Istanbul:20261102T103000\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE\r\nEXDATE;TZID=Europe/Istanbul:20261118T100000\r\nSUMMARY:Daily\\, sync\r\nEND:VEVENT\r\n" +
-        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261116\r\nSUMMARY:Tatil\r\nEND:VEVENT\r\n" +
-        "BEGIN:VEVENT\r\nDTSTART:20261116T150000Z\r\nDURATION:PT45M\r\nSTATUS:CANCELLED\r\nSUMMARY:İptal\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    static readonly DateTimeOffset Now = new(2026, 11, 16, 12, 0, 0, TimeSpan.FromHours(3));
 
     [Fact]
-    public void ParsesUnfoldedUtcEvent()
+    public void EmptyMeansNoSource()
     {
-        var from = new DateTimeOffset(2026, 11, 16, 0, 0, 0, TimeSpan.FromHours(3));
-        var ev = Ics.Parse(Sample, from, from.AddDays(1), Ist);
-        var c = Assert.Single(ev, e => e.Title == "Calculus lecture");
-        Assert.Equal(new DateTimeOffset(2026, 11, 16, 14, 30, 0, TimeSpan.FromHours(3)), c.Start);
-        Assert.Equal(TimeSpan.FromMinutes(90), c.End - c.Start);
-        Assert.DoesNotContain(ev, e => e.Title == "İptal");
-        Assert.Contains(ev, e => e.Title == "Tatil" && e.AllDay);
+        Assert.Null(Limits.Fraction(new ManualLimit(), Now));
+        Assert.Equal("kaynak yok · elle gir", Limits.Freshness(new ManualLimit(), Now));
+        Assert.Equal("", Limits.ResetLabel(new ManualLimit(), Now));
     }
 
     [Fact]
-    public void ExpandsWeeklyByDayWithExdate()
+    public void ManualValueAndReset()
     {
-        var from = new DateTimeOffset(2026, 11, 16, 0, 0, 0, TimeSpan.FromHours(3));
-        var ev = Ics.Parse(Sample, from, from.AddDays(7), Ist).Where(e => e.Title == "Daily, sync").ToList();
-        // 16 Kasım Pzt ve 23 Kasım Pzt; 18 Kasım Çar EXDATE ile çıkarıldı (23 Kasım 00:00 sınırının içinde değil).
-        Assert.Equal(new[] { 16 }, ev.Select(e => e.Start.Day).ToArray());
-        Assert.Equal(10, ev[0].Start.Hour);
-        var ev2 = Ics.Parse(Sample, from, from.AddDays(10), Ist).Where(e => e.Title == "Daily, sync").Select(e => e.Start.Day).ToArray();
-        Assert.Equal(new[] { 16, 23, 25 }, ev2);
+        var l = new ManualLimit { Percent = 49.5, ResetsAt = new DateTimeOffset(2026, 11, 17, 13, 7, 0, TimeSpan.FromHours(3)), UpdatedAt = Now.AddMinutes(-30) };
+        Assert.Equal(0.495, Limits.Fraction(l, Now)!.Value, 3);
+        Assert.Equal("elle · 30dk önce", Limits.Freshness(l, Now));
+        Assert.Equal("Sal 13:07", Limits.ResetLabel(l, Now)); // 1 günden uzak: gün + saat
+        Assert.Equal("1s 7dk", Limits.ResetLabel(l, Now.AddHours(24)));
+        // sıfırlanma geçince eski yüzde gösterilmez
+        Assert.Null(Limits.Fraction(l, Now.AddDays(2)));
+        Assert.Equal("sıfırlandı", Limits.ResetLabel(l, Now.AddDays(2)));
     }
 
     [Fact]
-    public void NextSkipsAllDayAndPast()
+    public void CursorTierOnlyReadsTier()
     {
-        var from = new DateTimeOffset(2026, 11, 16, 0, 0, 0, TimeSpan.FromHours(3));
-        var ev = Ics.Parse(Sample, from, from.AddDays(2), Ist);
-        var now = new DateTimeOffset(2026, 11, 16, 13, 3, 0, TimeSpan.FromHours(3));
-        Assert.Equal("Calculus lecture", Ics.Next(ev, now)!.Title);
-        Assert.Equal(TimeSpan.FromMinutes(87), Ics.Next(ev, now)!.Start - now); // "1s 27dk sonra"
-    }
-
-    [Fact]
-    public void UntilAndCount()
-    {
-        var s = "BEGIN:VEVENT\nDTSTART:20261101T090000Z\nDTEND:20261101T093000Z\nRRULE:FREQ=DAILY;COUNT=3\nSUMMARY:A\nEND:VEVENT\n" +
-                "BEGIN:VEVENT\nDTSTART;VALUE=DATE:20261101\nRRULE:FREQ=DAILY;UNTIL=20261102\nSUMMARY:B\nEND:VEVENT\n";
-        var from = new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
-        var ev = Ics.Parse(s, from, from.AddDays(60), Ist);
-        Assert.Equal(3, ev.Count(e => e.Title == "A"));
-        Assert.Equal(2, ev.Count(e => e.Title == "B"));
+        var json = "{\"cliVersion\":\"2026.10.22\",\"subscriptionTier\":\"Pro+\",\"userEmail\":\"x@example.com\"}";
+        Assert.Equal("Pro+", Limits.ParseCursorTier(json));
+        Assert.Equal("Pro+", Limits.ParseCursorTier("uyarı satırı\n" + json));
+        Assert.Null(Limits.ParseCursorTier("not json"));
+        Assert.Null(Limits.ParseCursorTier("{\"a\":1}"));
     }
 }
 
-public class AiUsageTests
+public class ShareXTests
 {
-    static string Line(string ts, string id, long input, long output, string model = "claude-opus-4-5-20251101") =>
-        $"{{\"type\":\"assistant\",\"requestId\":\"r{id}\",\"timestamp\":\"{ts}\",\"message\":{{\"id\":\"{id}\",\"model\":\"{model}\",\"usage\":{{\"input_tokens\":{input},\"output_tokens\":{output},\"cache_read_input_tokens\":0}}}}}}";
+    [Theory]
+    [InlineData(ShareXCapture.Bolge, "-RectangleRegion")]
+    [InlineData(ShareXCapture.Pencere, "-ActiveWindow")]
+    [InlineData(ShareXCapture.TamEkran, "-PrintScreen")]
+    [InlineData(ShareXCapture.SonBolge, "-LastRegion")]
+    [InlineData(ShareXCapture.Monitor, "-ActiveMonitor")]
+    public void Args(ShareXCapture c, string arg) => Assert.Equal(arg, ShareX.Args(c));
 
     [Fact]
-    public void SessionBlockAndWeekly()
+    public void FindPrefersConfiguredThenCandidates()
     {
-        var lines = new[]
-        {
-            Line("2026-11-15T08:10:00Z", "a", 100, 50),                 // eski blok
-            Line("2026-11-16T07:20:00Z", "b", 1000, 500),               // yeni blok 07:00Z'de başlar
-            Line("2026-11-16T07:20:00Z", "b", 1000, 500),               // kopya: sayılmaz
-            Line("2026-11-16T09:00:00Z", "c", 2000, 500, "claude-sonnet-4-5-20250929"),
-            "bozuk satır {",
-        };
-        var entries = ClaudeUsage.ParseLines(lines).ToList();
-        Assert.Equal(4, entries.Count);
-        var now = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
-        var snap = ClaudeUsage.Compute(entries, now, 10_000, 100_000, DayOfWeek.Monday, 0);
-        Assert.Equal(new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero), snap.SessionResetsAt);
-        Assert.Equal(0.4, snap.SessionFraction, 3); // 4000/10000
-        Assert.Equal("Sonnet 4.5", snap.TopModel);
-        // Haftalık: Pazartesi 00:00 yerel saatten itibaren
-        var ws = ClaudeUsage.WeekStart(now, DayOfWeek.Monday, 0);
-        Assert.Equal(DayOfWeek.Monday, ws.ToLocalTime().DayOfWeek);
-        Assert.True(ws <= now && now - ws < TimeSpan.FromDays(7));
+        var have = new HashSet<string> { @"C:\Program Files\ShareX\ShareX.exe", @"D:\Araclar\ShareX.exe" };
+        var cands = new[] { @"C:\Program Files\ShareX\ShareX.exe", null! };
+        Assert.Equal(@"D:\Araclar\ShareX.exe", ShareX.Find("\"D:\\Araclar\\ShareX.exe\"", cands, have.Contains));
+        Assert.Equal(@"C:\Program Files\ShareX\ShareX.exe", ShareX.Find("", cands, have.Contains));
+        Assert.Equal(@"C:\Program Files\ShareX\ShareX.exe", ShareX.Find(@"E:\yok.exe", cands, have.Contains));
+        Assert.Null(ShareX.Find(null, new[] { @"Z:\yok.exe" }, have.Contains));
+    }
+}
+
+public class TaskbarGeometryTests
+{
+    static readonly Box Primary = new(0, 0, 2560, 1440);
+    static readonly Box Left = new(-1920, 272, 0, 1352);
+
+    [Fact]
+    public void TopTaskbarTriggersAtTopEdge()
+    {
+        var s = TaskbarGeometry.TriggerStrip(new Box(0, 0, 2560, 48), Primary);
+        Assert.Equal(new Box(0, 0, 2560, 2), s);
+        Assert.True(s.Contains(1280, 0)); Assert.False(s.Contains(1280, 10));
     }
 
     [Fact]
-    public void NoActiveSession()
-    {
-        var e = ClaudeUsage.ParseLines(new[] { Line("2026-11-16T01:00:00Z", "x", 10, 10) });
-        var snap = ClaudeUsage.Compute(e, new DateTimeOffset(2026, 11, 16, 9, 0, 0, TimeSpan.Zero), 100, 1000, DayOfWeek.Monday, 0);
-        Assert.Null(snap.SessionResetsAt);
-        Assert.Equal(0, snap.SessionFraction);
-    }
+    public void SecondaryMonitorTopTaskbar() =>
+        Assert.Equal(new Box(-1920, 272, 0, 274), TaskbarGeometry.TriggerStrip(new Box(-1920, 272, 0, 320), Left));
 
     [Fact]
-    public void PrettyModel() => Assert.Equal("Opus 4.5", ClaudeUsage.PrettyModel("claude-opus-4-5-20251101"));
-
-    [Fact]
-    public void CodexRateLimits()
+    public void BottomLeftRightEdges()
     {
-        var l = "{\"timestamp\":\"2026-11-16T10:00:00Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"rate_limits\":{\"primary\":{\"used_percent\":41.0,\"window_minutes\":300,\"resets_in_seconds\":9600},\"secondary\":{\"used_percent\":64.0,\"window_minutes\":10080,\"resets_at\":1795000000}}}}";
-        var s = CodexUsage.FromLines(new[] { "{}", l })!;
-        Assert.Equal(0.41, s.SessionFraction, 3);
-        Assert.Equal(0.64, s.WeeklyFraction, 3);
-        Assert.Equal(new DateTimeOffset(2026, 11, 16, 12, 40, 0, TimeSpan.Zero), s.SessionResetsAt);
-        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1795000000), s.WeeklyResetsAt);
+        Assert.Equal(new Box(0, 1438, 2560, 1440), TaskbarGeometry.TriggerStrip(new Box(0, 1392, 2560, 1440), Primary));
+        Assert.Equal(new Box(0, 0, 2, 1440), TaskbarGeometry.TriggerStrip(new Box(0, 0, 60, 1440), Primary));
+        Assert.Equal(new Box(2558, 0, 2560, 1440), TaskbarGeometry.TriggerStrip(new Box(2500, 0, 2560, 1440), Primary));
     }
 }
 
 public class AlertTests
 {
     static readonly DateTimeOffset Noon = new(2026, 11, 16, 12, 0, 0, TimeSpan.FromHours(3));
+    static ManualLimit L(double p) => new() { Percent = p, ResetsAt = Noon.AddDays(1) };
 
     [Fact]
-    public void MeetingAlertPausesMediaOnce()
-    {
-        var s = new Settings { QuietHoursEnabled = false };
-        var eng = new AlertEngine();
-        var ev = new CalEvent(Noon.AddMinutes(4), Noon.AddMinutes(34), "Toplantı", false);
-        var a = eng.Evaluate(s, new AlertInput(Noon, ev, true, null, null, false));
-        var al = Assert.Single(a);
-        Assert.Equal(AlertAction.PauseMedia, al.Action);
-        Assert.Empty(eng.Evaluate(s, new AlertInput(Noon.AddMinutes(1), ev, true, null, null, false)));
-    }
-
-    [Fact]
-    public void NoAlertTooEarly()
-    {
-        var s = new Settings { QuietHoursEnabled = false };
-        var ev = new CalEvent(Noon.AddMinutes(30), Noon.AddMinutes(60), "X", false);
-        Assert.Empty(new AlertEngine().Evaluate(s, new AlertInput(Noon, ev, false, null, null, false)));
-    }
-
-    [Fact]
-    public void AiLimitAndBattery()
+    public void LimitAndBatteryOnce()
     {
         var s = new Settings { QuietHoursEnabled = false, AiAlertPercent = 80, BatteryAlertPercent = 15 };
-        var ai = new AiUsageSnapshot("Claude Code", 0.9, Noon.AddHours(1), "", 0.5, Noon.AddDays(3), "", null);
-        var a = new AlertEngine().Evaluate(s, new AlertInput(Noon, null, false, ai, 12, false));
+        var eng = new AlertEngine();
+        var a = eng.Evaluate(s, new AlertInput(Noon, L(90), L(50), 12, false));
         Assert.Equal(2, a.Count);
-        Assert.Contains(a, x => x.Title.Contains("oturum"));
+        Assert.Contains(a, x => x.Title.Contains("Grok Bot"));
         Assert.Contains(a, x => x.Title == "Pil azaldı");
-        Assert.Empty(new AlertEngine().Evaluate(s, new AlertInput(Noon, null, false, null, 12, true)));
+        Assert.Empty(eng.Evaluate(s, new AlertInput(Noon.AddMinutes(1), L(91), L(50), 12, false)));
+        Assert.Empty(new AlertEngine().Evaluate(s, new AlertInput(Noon, null, null, 12, true)));
+    }
+
+    [Fact]
+    public void NoAlertWithoutSourceOrAfterReset()
+    {
+        var s = new Settings { QuietHoursEnabled = false };
+        Assert.Empty(new AlertEngine().Evaluate(s, new AlertInput(Noon, new ManualLimit(), new ManualLimit(), null, false)));
+        var old = new ManualLimit { Percent = 99, ResetsAt = Noon.AddHours(-1) };
+        Assert.Empty(new AlertEngine().Evaluate(s, new AlertInput(Noon, old, null, null, false)));
     }
 
     [Fact]
@@ -178,29 +150,35 @@ public class AlertTests
         Assert.True(AlertEngine.InQuietHours(s, night));
         Assert.False(AlertEngine.InQuietHours(s, Noon));
         var eng = new AlertEngine();
-        var ai = new AiUsageSnapshot("Codex", 0.95, night.AddHours(2), "", 0, null, "", null);
-        Assert.Empty(eng.Evaluate(s, new AlertInput(night, null, false, ai, null, false)));
-        var morning = eng.Evaluate(s, new AlertInput(Noon, null, false, ai, null, false));
-        Assert.Single(morning);
+        Assert.Empty(eng.Evaluate(s, new AlertInput(night, null, L(95), null, false)));
+        var morning = eng.Evaluate(s, new AlertInput(Noon, null, L(95), null, false));
+        Assert.Contains("Cursor", Assert.Single(morning).Title);
     }
 }
 
-public class ScreenTimeTests
+public class MigrationTests
 {
     [Fact]
-    public void SplitsAcrossHoursAndDays()
+    public void OldSettingsLoseRemovedWidgetsAndGainNewOnes()
     {
-        var st = new ScreenTimeStore();
-        st.Add("code", new DateTime(2026, 11, 16, 10, 0, 30), 60);
-        var d = st.Day(new DateTime(2026, 11, 16));
-        Assert.Equal(60, d.TotalSeconds);
-        Assert.Equal(30, d.Hours[9]); Assert.Equal(30, d.Hours[10]);
-        st.Add("chrome", new DateTime(2026, 11, 17, 0, 0, 10), 20);
-        Assert.Equal(10, st.Day(new DateTime(2026, 11, 16)).Apps["chrome"]);
-        Assert.Equal(10, st.Day(new DateTime(2026, 11, 17)).Apps["chrome"]);
-        Assert.Equal("code", st.Top(new DateTime(2026, 11, 16), 1).First().App);
-        st.Prune(new DateTime(2027, 1, 1));
-        Assert.Empty(st.Days);
+        var p = Path.Combine(Path.GetTempPath(), "kd-mig-" + Guid.NewGuid() + ".json");
+        File.WriteAllText(p, "{\"Style\":\"Siyah\",\"AiSource\":\"ClaudeCode\",\"IcsUrls\":[\"x\"],\"Widgets\":[\"start\",\"apps\",\"ai\",\"media\",\"volume\",\"screentime\",\"calendar\",\"battery\",\"clock\"]}");
+        var s = Settings.Load(p);
+        Assert.Equal(DockStyle.Siyah, s.Style);
+        Assert.Equal(new[] { "start", "apps", "ai", "volume", "storage", "screenshot", "battery", "clock" }, s.Widgets);
+        Assert.Equal(2, s.Version);
+        // 1.1 dosyası tekrar taşınmaz: kullanıcı Depolama'yı kapattıysa geri gelmez
+        s.Widgets.Remove("storage"); s.Save(p);
+        Assert.DoesNotContain("storage", Settings.Load(p).Widgets);
+        File.Delete(p);
+    }
+
+    [Fact]
+    public void FreshDefaultsHaveNewWidgets()
+    {
+        var s = Settings.Load(Path.Combine(Path.GetTempPath(), "kd-yok-" + Guid.NewGuid() + ".json"));
+        Assert.Contains("storage", s.Widgets); Assert.Contains("screenshot", s.Widgets);
+        Assert.DoesNotContain("media", s.Widgets); Assert.DoesNotContain("calendar", s.Widgets); Assert.DoesNotContain("screentime", s.Widgets);
     }
 }
 

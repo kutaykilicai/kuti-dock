@@ -79,13 +79,12 @@ namespace KutayDock
                 {
                     "start" => new StartTile(_s, _theme),
                     "apps" => new AppsTile(_s, _theme, () => _hwnd),
-                    "ai" => set.AiSource == AiSource.Kapali ? null : new AiTile(_s, _theme),
-                    "media" => new MediaTile(_s, _theme),
+                    "ai" => new LimitsTile(_s, _theme, _openSettings),
                     "volume" => new VolumeTile(_s, _theme),
                     "system" => new SystemTile(_s, _theme),
                     "network" => new NetworkTile(_s, _theme),
-                    "screentime" => new ScreenTimeTile(_s, _theme),
-                    "calendar" => new CalendarTile(_s, _theme, _openSettings),
+                    "storage" => new StorageTile(_s, _theme),
+                    "screenshot" => new ScreenshotTile(_s, _theme),
                     "battery" => new BatteryTile(_s, _theme),
                     "tray" => new TrayTile(_s, _theme),
                     "clock" => new ClockTile(_s, _theme),
@@ -185,13 +184,9 @@ namespace KutayDock
 
         void RunAlerts()
         {
-            var input = new AlertInput(DateTimeOffset.Now, Ics.Next(_s.Events, DateTimeOffset.Now), _s.MediaPlaying,
-                _s.Settings.AiSource == AiSource.Kapali ? null : _s.Ai, _s.Battery, _s.Charging);
+            var input = new AlertInput(DateTimeOffset.Now, _s.Settings.GrokBot, _s.Settings.Cursor, _s.Battery, _s.Charging);
             foreach (var a in _alerts.Evaluate(_s.Settings, input))
-            {
-                if (a.Action == AlertAction.PauseMedia) _s.MediaCommand("pause");
                 if (!string.IsNullOrEmpty(a.Title)) _notify(a.Title, a.Body);
-            }
         }
 
         protected override void OnClosed(EventArgs e)

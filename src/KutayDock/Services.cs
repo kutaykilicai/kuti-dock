@@ -7,7 +7,6 @@ using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Threading.Tasks;
 using KutayDock.Core;
-using Windows.Media.Control;
 
 namespace KutayDock
 {
@@ -26,39 +25,21 @@ namespace KutayDock
         public int? Battery; public bool Charging, HasBattery;
         Native.FILETIME _i0, _k0, _u0; long _rx0 = -1, _tx0; DateTime _net0;
 
-        // Medya
-        GlobalSystemMediaTransportControlsSessionManager _media;
-        public string MediaTitle, MediaArtist; public bool MediaPlaying, MediaAvailable;
-
         // Veri
-        public List<CalEvent> Events = new(); public DateTime EventsAt = DateTime.MinValue; public string CalendarError;
         public WeatherNow Weather; DateTime _weatherAt = DateTime.MinValue;
-        public AiUsageSnapshot Ai; DateTime _aiAt = DateTime.MinValue; public string AiError;
-        public ScreenTimeStore ScreenTime = new(); DateTime _stLast = DateTime.Now, _stSaved = DateTime.Now;
+        public List<DriveInfo> Drives = new(); DateTime _drivesAt = DateTime.MinValue;
+        /// <summary>Cursor planı, Cursor CLI'nin belgelenmiş "agent about --format json" komutundan.</summary>
+        public string CursorTier; DateTime _tierAt = DateTime.MinValue;
 
         PerformanceCounterHelper _gpu;
-        bool _busyCal, _busyWeather, _busyAi; volatile bool _busyGpu;
-        readonly Dictionary<string, (long len, DateTime mtime, List<ClaudeUsage.Entry> entries)> _claudeCache = new();
+        bool _busyWeather, _busyTier; volatile bool _busyGpu;
 
         public Services(Settings s)
         {
             Settings = s;
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("KutayDock/1.0");
             Native.GetSystemTimes(out _i0, out _k0, out _u0);
-            try
-            {
-                var p = Path.Combine(DataDir, "ekran-suresi.json");
-                if (File.Exists(p)) ScreenTime = Settings.Deserialize<ScreenTimeStore>(File.ReadAllText(p)) ?? new();
-            }
-            catch (Exception) { }
-            _ = InitMedia();
             _gpu = new PerformanceCounterHelper();
-        }
-
-        async Task InitMedia()
-        {
-            try { _media = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync(); }
-            catch (Exception) { _media = null; }
         }
 
         /// <summary>Her saniye çağrılır (dock gizliyken çağrılmaz).</summary>
@@ -99,58 +80,7 @@ namespace KutayDock
                 Battery = HasBattery ? ps.BatteryLifePercent : null;
                 Charging = ps.ACLineStatus == 1;
             }
-            // Medya
-            try
-            {
-                var sess = _media?.GetCurrentSession();
-                MediaAvailable = sess != null;
-                if (sess != null)
-                {
-                    MediaPlaying = sess.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-                    _ = RefreshMediaProps(sess);
-                }
-                else { MediaPlaying = false; MediaTitle = null; MediaArtist = null; }
-            }
-            catch (Exception) { MediaAvailable = false; }
-
-            TrackScreenTime();
             RefreshSlowData();
-        }
-
-        async Task RefreshMediaProps(GlobalSystemMediaTransportControlsSession s)
-        {
-            try { var p = await s.TryGetMediaPropertiesAsync(); MediaTitle = p?.Title; MediaArtist = p?.Artist; } catch (Exception) { }
-        }
-
-        public async void MediaCommand(string cmd)
-        {
-            try
-            {
-                var s = _media?.GetCurrentSession(); if (s == null) return;
-                switch (cmd)
-                {
-                    case "toggle": await s.TryTogglePlayPauseAsync(); break;
-                    case "pause": await s.TryPauseAsync(); break;
-                    case "next": await s.TrySkipNextAsync(); break;
-                    case "prev": await s.TrySkipPreviousAsync(); break;
-                }
-            }
-            catch (Exception) { }
-        }
-
-        void TrackScreenTime()
-        {
-            var now = DateTime.Now;
-            double sec = (now - _stLast).TotalSeconds; _stLast = now;
-            if (sec <= 0 || sec > 10) return; // uyku/hazırda bekleme sonrası atla
-            if (Native.IdleTime() > TimeSpan.FromMinutes(3)) return; // boşta sayılmaz
-            var fg = Native.GetForegroundWindow();
-            if (fg == IntPtr.Zero) return;
-            Native.GetWindowThreadProcessId(fg, out uint pid);
-            var path = Native.ProcessPath(pid);
-            if (path == null) return;
-            ScreenTime.Add(AppName(path), now, sec);
-            if ((now - _stSaved).TotalSeconds >= 60) { SaveScreenTime(); _stSaved = now; }
         }
 
         static readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase);
@@ -162,47 +92,20 @@ namespace KutayDock
             return Names[path] = n.Trim();
         }
 
-        public void SaveScreenTime()
-        {
-            try
-            {
-                Directory.CreateDirectory(DataDir);
-                ScreenTime.Prune(DateTime.Today);
-                File.WriteAllText(Path.Combine(DataDir, "ekran-suresi.json"), Settings.Serialize(ScreenTime));
-            }
-            catch (Exception) { }
-        }
-
         void RefreshSlowData()
         {
             var now = DateTime.Now;
-            if (!_busyCal && Settings.IcsUrls.Count > 0 && (now - EventsAt).TotalMinutes >= 15) { _busyCal = true; _ = LoadCalendar(); }
             if (!_busyWeather && (now - _weatherAt).TotalMinutes >= 30) { _busyWeather = true; _ = LoadWeather(); }
-            if (!_busyAi && Settings.AiSource != AiSource.Kapali && (now - _aiAt).TotalSeconds >= 60) { _busyAi = true; _ = LoadAi(); }
-        }
-
-        public void InvalidateData() { EventsAt = DateTime.MinValue; _weatherAt = DateTime.MinValue; _aiAt = DateTime.MinValue; if (Settings.IcsUrls.Count == 0) Events = new(); }
-
-        async Task LoadCalendar()
-        {
-            try
+            if ((now - _drivesAt).TotalSeconds >= 30)
             {
-                var from = DateTimeOffset.Now.AddHours(-12); var to = DateTimeOffset.Now.AddDays(14);
-                var all = new List<CalEvent>(); string err = null;
-                foreach (var url in Settings.IcsUrls.Where(u => !string.IsNullOrWhiteSpace(u)))
-                {
-                    try
-                    {
-                        var u = url.Trim(); if (u.StartsWith("webcal://", StringComparison.OrdinalIgnoreCase)) u = "https://" + u[9..];
-                        var text = await Http.GetStringAsync(u);
-                        all.AddRange(await Task.Run(() => Ics.Parse(text, from, to)));
-                    }
-                    catch (Exception) { err = "Bir takvim okunamadı"; }
-                }
-                Events = all.OrderBy(e => e.Start).ToList(); CalendarError = err;
+                _drivesAt = now;
+                try { Drives = DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType is DriveType.Fixed or DriveType.Removable && d.TotalSize > 0).ToList(); }
+                catch (Exception) { }
             }
-            finally { EventsAt = DateTime.Now; _busyCal = false; }
+            if (!_busyTier && (now - _tierAt).TotalHours >= 6) { _busyTier = true; _ = LoadCursorTier(); }
         }
+
+        public void InvalidateData() { _weatherAt = DateTime.MinValue; _drivesAt = DateTime.MinValue; }
 
         async Task LoadWeather()
         {
@@ -211,55 +114,32 @@ namespace KutayDock
             finally { _weatherAt = DateTime.Now; _busyWeather = false; }
         }
 
-        async Task LoadAi()
+        /// <summary>
+        /// Cursor CLI kuruluysa "agent about --format json" pencere açmadan çalıştırılır; yalnızca subscriptionTier okunur.
+        /// Cursor'ın belirteçlerine, çerezlerine ya da yerel veritabanına dokunulmaz.
+        /// </summary>
+        async Task LoadCursorTier()
         {
             try
             {
-                var s = Settings;
-                Ai = await Task.Run(() =>
+                var cmd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "cursor-agent", "agent.cmd");
+                if (!File.Exists(cmd)) return;
+                var psi = new ProcessStartInfo(cmd, "about --format json")
                 {
-                    var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                    var since = DateTime.UtcNow.AddDays(-8);
-                    if (s.AiSource == AiSource.Codex)
-                    {
-                        var dir = Path.Combine(home, ".codex", "sessions");
-                        if (!Directory.Exists(dir)) { AiError = "~/.codex bulunamadı"; return null; }
-                        var files = Directory.EnumerateFiles(dir, "*.jsonl", SearchOption.AllDirectories)
-                            .Select(f => new FileInfo(f)).Where(f => f.LastWriteTimeUtc > since).OrderByDescending(f => f.LastWriteTimeUtc).Take(3);
-                        foreach (var f in files) { var snap = CodexUsage.FromLines(ReadLines(f.FullName)); if (snap != null) { AiError = null; return snap; } }
-                        AiError = "Codex kaydında limit yok"; return null;
-                    }
-                    var roots = new[] { Path.Combine(home, ".claude", "projects"), Path.Combine(home, ".config", "claude", "projects") }.Where(Directory.Exists).ToList();
-                    if (roots.Count == 0) { AiError = "~/.claude bulunamadı"; return null; }
-                    // Değişmeyen dosyalar yeniden okunmaz (önbellek: boyut + değiştirilme zamanı).
-                    var entries = new List<ClaudeUsage.Entry>();
-                    var seenFiles = new HashSet<string>();
-                    foreach (var f in roots.SelectMany(r => Directory.EnumerateFiles(r, "*.jsonl", SearchOption.AllDirectories)).Select(f => new FileInfo(f)).Where(f => f.LastWriteTimeUtc > since))
-                    {
-                        seenFiles.Add(f.FullName);
-                        if (!_claudeCache.TryGetValue(f.FullName, out var c) || c.len != f.Length || c.mtime != f.LastWriteTimeUtc)
-                            _claudeCache[f.FullName] = c = (f.Length, f.LastWriteTimeUtc, ClaudeUsage.ParseLines(ReadLines(f.FullName)).ToList());
-                        entries.AddRange(c.entries);
-                    }
-                    foreach (var k in _claudeCache.Keys.Where(k => !seenFiles.Contains(k)).ToList()) _claudeCache.Remove(k);
-                    AiError = null;
-                    return ClaudeUsage.Compute(entries, DateTimeOffset.Now, s.ClaudeSessionTokenLimit, s.ClaudeWeeklyTokenLimit, s.WeeklyResetDay, s.WeeklyResetHour);
-                });
+                    UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                };
+                using var p = Process.Start(psi);
+                var outTask = p.StandardOutput.ReadToEndAsync();
+                var done = await Task.Run(() => p.WaitForExit(30000));
+                if (!done) { try { p.Kill(true); } catch (Exception) { } return; }
+                CursorTier = Limits.ParseCursorTier(await outTask) ?? CursorTier;
             }
-            catch (Exception) { AiError = "Okunamadı"; }
-            finally { _aiAt = DateTime.Now; _busyAi = false; }
+            catch (Exception) { }
+            finally { _tierAt = DateTime.Now; _busyTier = false; }
         }
 
-        static IEnumerable<string> ReadLines(string path)
-        {
-            // Dosya başka bir süreç tarafından yazılırken de okunabilsin.
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var sr = new StreamReader(fs);
-            string line;
-            while ((line = sr.ReadLine()) != null) yield return line;
-        }
-
-        public void Dispose() { SaveScreenTime(); _gpu?.Dispose(); }
+        public void Dispose() { _gpu?.Dispose(); }
     }
 
     /// <summary>GPU yükü: Windows "GPU Engine" sayaçlarındaki 3D motorlarının toplamı. Yoksa -1.</summary>

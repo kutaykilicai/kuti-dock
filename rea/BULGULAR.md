@@ -47,3 +47,11 @@ uygulaması olduğu ve box'ta çalıştırılamadığı için defter GEREKSINIML
 1. Liquid Glass kırılma efektinin uygulanışı (kapalı kaynak).
 2. AI sağlayıcılarının limitlerinin hangi uç noktalardan okunduğu ("kendi oturumundan, salt okunur").
 3. Uygulama çatısı (MSI + latest.json + imzalı güncelleyici → Tauri olabilir) ve otomasyon motorunun iç yapısı.
+
+## 1.1 eki (16 Kasım 2026)
+- /widgets sayfası yeniden okundu: Storage widget'ı "Free space on your drive, with a usage bar" (System grubu).
+  Kutay Dock'taki Depolama widget'ı bu tarife göre özgün kodla yazıldı (sistem diski boş alanı + doluluk çubuğu,
+  tıklayınca tüm diskler).
+- Ekran görüntüsü için lumabar'ın değil, ShareX'in resmî komut satırı belgesi (getsharex.com/docs/command-line-arguments) kullanıldı.
+- Limit kaynakları: Grok Bot ve Cursor için belgelenmiş kişisel kullanım API'si bulunamadı (Cursor Admin API yalnızca
+  Enterprise). Cursor plan adı belgelenmiş CLI komutu `agent about --format json` ile alınıyor.

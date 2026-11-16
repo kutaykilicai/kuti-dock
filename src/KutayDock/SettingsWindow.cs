@@ -19,9 +19,9 @@ namespace KutayDock
 
         static readonly (string id, string name)[] AllWidgets =
         {
-            ("start", "Başlat düğmesi"), ("apps", "Uygulamalar (sabitlenenler + açık pencereler)"), ("ai", "Yapay zekâ kullanımı (Oturum / Haftalık)"),
-            ("media", "Şimdi çalan (medya kontrolü)"), ("volume", "Ses"), ("system", "Sistem (CPU / RAM / GPU)"), ("network", "Ağ hızı"),
-            ("screentime", "Ekran süresi"), ("calendar", "Takvim (sıradaki etkinlik)"), ("battery", "Pil (yalnızca dizüstü)"), ("tray", "Gizli tepsi simgeleri (^)"), ("clock", "Saat, tarih ve hava durumu"),
+            ("start", "Başlat düğmesi"), ("apps", "Uygulamalar (sabitlenenler + açık pencereler)"), ("ai", "Limitler (Grok Bot; tıklayınca Cursor)"),
+            ("volume", "Ses"), ("system", "Sistem (CPU / RAM / GPU)"), ("network", "Ağ hızı"),
+            ("storage", "Depolama (disk boş alanı)"), ("screenshot", "Ekran görüntüsü (ShareX)"), ("battery", "Pil (yalnızca dizüstü)"), ("tray", "Gizli tepsi simgeleri (^)"), ("clock", "Saat, tarih ve hava durumu"),
         };
 
         public SettingsWindow(Settings current, Action<Settings> apply)
@@ -106,36 +106,26 @@ namespace KutayDock
             void Sync() => _s.Widgets = order.Where(enabled.Contains).ToList();
             Render();
 
-            // Takvim
-            var cal = Card(p, "Takvim");
-            cal.Children.Add(new TextBlock { Text = "Google, Outlook ya da iCloud takviminin gizli iCal (.ics) adresini yapıştır; her satıra bir tane. Salt okunur, 15 dakikada bir okunur, adres yalnızca bu PC'de kalır.", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap });
-            var ics = new TextBox { Text = string.Join(Environment.NewLine, _s.IcsUrls), AcceptsReturn = true, Height = 70, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.NoWrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            ics.TextChanged += (_, _) => _s.IcsUrls = ics.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
-            cal.Children.Add(ics);
-            cal.Children.Add(Toggle("Toplantıdan önce uyar", _s.AlertMeeting, v => _s.AlertMeeting = v));
-            cal.Children.Add(Toggle("Toplantıdan önce müziği duraklat", _s.PauseMediaBeforeMeeting, v => _s.PauseMediaBeforeMeeting = v));
-            cal.Children.Add(Number("Kaç dakika önce", _s.MeetingLeadMinutes, v => _s.MeetingLeadMinutes = (int)v));
-
             // Hava
             var wx = Card(p, "Hava durumu (Open-Meteo, anahtarsız)");
             wx.Children.Add(TextField("Şehir adı", _s.City, v => _s.City = v));
             wx.Children.Add(Number("Enlem", _s.Latitude, v => _s.Latitude = v));
             wx.Children.Add(Number("Boylam", _s.Longitude, v => _s.Longitude = v));
 
-            // Yapay zekâ
-            var ai = Card(p, "Yapay zekâ kullanımı");
-            ai.Children.Add(Pills(new[] { ("Kapalı", AiSource.Kapali), ("Claude Code", AiSource.ClaudeCode), ("Codex (ChatGPT)", AiSource.Codex) }, _s.AiSource, v => _s.AiSource = v));
-            ai.Children.Add(new TextBlock { Text = "Codex: limit yüzdeleri Codex CLI'nin kendi kayıtlarından (~/.codex) birebir okunur.\nClaude Code: ~/.claude kayıtlarındaki token'lar sayılır; yüzde, aşağıdaki limitlere göre tahmindir. Hiçbir yere bağlanılmaz.", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
-            ai.Children.Add(Number("Oturum (5 saat) token limiti", _s.ClaudeSessionTokenLimit, v => _s.ClaudeSessionTokenLimit = (long)v));
-            ai.Children.Add(Number("Haftalık token limiti", _s.ClaudeWeeklyTokenLimit, v => _s.ClaudeWeeklyTokenLimit = (long)v));
-            ai.Children.Add(Label("Haftalık sıfırlanma günü"));
-            var days = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday };
-            ai.Children.Add(Pills(days.Select(d => (Format.Tr.DateTimeFormat.GetAbbreviatedDayName(d), d)).ToArray(), _s.WeeklyResetDay, v => _s.WeeklyResetDay = v));
-            ai.Children.Add(Number("Sıfırlanma saati (0-23)", _s.WeeklyResetHour, v => _s.WeeklyResetHour = Math.Clamp((int)v, 0, 23)));
+            // Limitler
+            var lim = Card(p, "Limitler");
+            lim.Children.Add(new TextBlock { Text = "Grok Bot ve Cursor kişisel planlar için belgelenmiş bir kullanım API'si sunmuyor; bu yüzden yüzdeyi ve sıfırlanma zamanını buraya elle gir (boş = kaynak yok). Cursor planı (ör. Pro+) Cursor CLI'nin \"agent about\" komutundan okunur. Tarih biçimi: 17.11.2026 13:07", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap });
+            LimitFields(lim, "Grok Bot", _s.GrokBot);
+            LimitFields(lim, "Cursor", _s.Cursor);
+
+            // Ekran görüntüsü
+            var shot = Card(p, "Ekran görüntüsü (ShareX)");
+            shot.Children.Add(new TextBlock { Text = "Boş bırakırsan ShareX.exe otomatik bulunur (Program Files, kullanıcı klasörü, kayıt defteri).", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap });
+            shot.Children.Add(TextField("ShareX.exe yolu", _s.ShareXPath, v => _s.ShareXPath = v));
 
             // Uyarılar
             var al = Card(p, "Akıllı uyarılar");
-            al.Children.Add(Toggle("Yapay zekâ limiti dolmadan uyar", _s.AlertAiLimit, v => _s.AlertAiLimit = v));
+            al.Children.Add(Toggle("Grok Bot / Cursor limiti eşiği geçince uyar", _s.AlertAiLimit, v => _s.AlertAiLimit = v));
             al.Children.Add(Number("Uyarı eşiği (%)", _s.AiAlertPercent, v => _s.AiAlertPercent = Math.Clamp((int)v, 1, 100)));
             al.Children.Add(Toggle("Pil azalınca uyar", _s.AlertBattery, v => _s.AlertBattery = v));
             al.Children.Add(Number("Pil eşiği (%)", _s.BatteryAlertPercent, v => _s.BatteryAlertPercent = Math.Clamp((int)v, 1, 100)));
@@ -143,12 +133,41 @@ namespace KutayDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.0 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.1 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }
 
         static SolidColorBrush Brush(string hex) => Theme.B(hex);
+
+        static void LimitFields(Panel parent, string name, ManualLimit l)
+        {
+            parent.Children.Add(Label(name));
+            var tr = Format.Tr;
+            var pct = Free("Kullanılan (%)", l.Percent?.ToString("0.#", tr) ?? "", t =>
+            {
+                if (t.Length == 0) { l.Percent = null; return true; }
+                if (!double.TryParse(t.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) || v < 0 || v > 100) return false;
+                l.Percent = v; return true;
+            }, () => l.UpdatedAt = DateTimeOffset.Now);
+            var rst = Free("Sıfırlanma (gg.aa.yyyy ss:dd)", l.ResetsAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm", tr) ?? "", t =>
+            {
+                if (t.Length == 0) { l.ResetsAt = null; return true; }
+                if (!DateTime.TryParseExact(t, new[] { "dd.MM.yyyy HH:mm", "d.M.yyyy H:mm", "dd.MM.yyyy" }, tr, DateTimeStyles.AssumeLocal, out var d)) return false;
+                l.ResetsAt = new DateTimeOffset(d); return true;
+            }, () => l.UpdatedAt = DateTimeOffset.Now);
+            parent.Children.Add(pct); parent.Children.Add(rst);
+        }
+
+        static DockPanel Free(string label, string value, Func<string, bool> tryset, Action changed)
+        {
+            var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+            var tb = new TextBox { Text = value, Width = 180 };
+            tb.TextChanged += (_, _) => { if (tryset(tb.Text.Trim())) { tb.BorderBrush = Brush("#3A3A40"); changed(); } else tb.BorderBrush = Theme.Red; };
+            DockPanel.SetDock(tb, Dock.Right); d.Children.Add(tb);
+            d.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+            return d;
+        }
 
         static StackPanel Card(Panel parent, string title)
         {

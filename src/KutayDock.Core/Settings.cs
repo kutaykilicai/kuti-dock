@@ -5,7 +5,14 @@ namespace KutayDock.Core;
 
 public enum DockStyle { Cam, Siyah, Gece, Beyaz }
 public enum DockEdge { Alt, Ust }
-public enum AiSource { Kapali, ClaudeCode, Codex }
+
+/// <summary>Elle girilen limit değeri (yüzde + sıfırlanma zamanı).</summary>
+public sealed class ManualLimit
+{
+    public double? Percent { get; set; }
+    public DateTimeOffset? ResetsAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
+}
 
 /// <summary>Tüm ayarlar. %APPDATA%\KutayDock\ayarlar.json içinde durur.</summary>
 public sealed class Settings
@@ -23,28 +30,26 @@ public sealed class Settings
 
     public List<string> Widgets { get; set; } = new()
     {
-        "start", "apps", "ai", "media", "volume", "system", "network", "screentime", "calendar", "battery", "tray", "clock"
+        "start", "apps", "ai", "volume", "system", "network", "storage", "screenshot", "battery", "tray", "clock"
     };
 
-    // Takvim
-    public List<string> IcsUrls { get; set; } = new();
+    /// <summary>Ayar dosyası sürümü (1.0'da alan yoktu = 0). 2 = Kutay Dock 1.1. Load() her zaman Migrate() çağırır.</summary>
+    public int Version { get; set; }
+
+    // ShareX (boşsa otomatik bulunur)
+    public string ShareXPath { get; set; } = "";
 
     // Hava durumu (varsayılan İstanbul)
     public string City { get; set; } = "İstanbul";
     public double Latitude { get; set; } = 41.01;
     public double Longitude { get; set; } = 28.97;
 
-    // Yapay zekâ kullanımı
-    public AiSource AiSource { get; set; } = AiSource.ClaudeCode;
-    public long ClaudeSessionTokenLimit { get; set; } = 20_000_000;
-    public long ClaudeWeeklyTokenLimit { get; set; } = 300_000_000;
-    public DayOfWeek WeeklyResetDay { get; set; } = DayOfWeek.Monday;
-    public int WeeklyResetHour { get; set; } = 0;
+    // Limitler. Grok Bot ve Cursor kişisel planlar için belgelenmiş bir kullanım API'si sunmuyor;
+    // değerler elle girilir (Ayarlar ya da widget paneli).
+    public ManualLimit GrokBot { get; set; } = new();
+    public ManualLimit Cursor { get; set; } = new();
 
     // Akıllı uyarılar
-    public bool AlertMeeting { get; set; } = true;
-    public int MeetingLeadMinutes { get; set; } = 5;
-    public bool PauseMediaBeforeMeeting { get; set; } = true;
     public bool AlertAiLimit { get; set; } = true;
     public int AiAlertPercent { get; set; } = 85;
     public bool AlertBattery { get; set; } = true;
@@ -66,10 +71,24 @@ public sealed class Settings
         try
         {
             if (File.Exists(path))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Opts) ?? new Settings();
+                return (JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Opts) ?? new Settings()).Migrate();
         }
         catch (Exception) { /* bozuk dosya: varsayılanlarla başla */ }
-        return new Settings();
+        return new Settings().Migrate();
+    }
+
+    /// <summary>1.0 ayarlarını 1.1'e taşır: kaldırılan widget'lar çıkar, Depolama ve Ekran görüntüsü eklenir.</summary>
+    public Settings Migrate()
+    {
+        if (Version >= 2) return this;
+        Widgets.RemoveAll(w => w is "media" or "screentime" or "calendar");
+        int at = Widgets.IndexOf("battery");
+        if (at < 0) at = Widgets.IndexOf("clock");
+        if (at < 0) at = Widgets.Count;
+        foreach (var w in new[] { "screenshot", "storage" })
+            if (!Widgets.Contains(w)) Widgets.Insert(at, w);
+        Version = 2;
+        return this;
     }
 
     public void Save(string path)

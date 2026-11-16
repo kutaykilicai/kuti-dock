@@ -46,25 +46,110 @@ namespace KutayDock
         }
 
         // ---- Windows görev çubuğu ----
+        // Önce Windows'un kendi ayarı denenir (ABM_SETSTATE / ABS_AUTOHIDE). Windows 11 25H2'de bu çağrı
+        // "başarılı" dönüp hiçbir şey değiştirmeyebiliyor (test PC'sinde durum 0 kaldı). O zaman yedek yol:
+        // tüm görev çubukları (Shell_TrayWnd + her monitördeki Shell_SecondaryTrayWnd) gizlenir ve fare
+        // çubuğun bulunduğu ekran kenarına (üst/alt/sol/sağ) gelince geri gösterilir. Explorer yeniden
+        // başlatılmaz, kayıt defteri değişmez; çıkışta her şey açılıştaki hâline döner.
         static int? _originalState;
+        static bool _fallback;
+        static System.Windows.Threading.DispatcherTimer _poll;
+        static readonly System.Collections.Generic.HashSet<IntPtr> _hiddenBars = new();
+        static bool _revealed;
+
+        static Native.APPBARDATA TrayData() => new() { cbSize = Marshal.SizeOf<Native.APPBARDATA>(), hWnd = Native.FindWindow("Shell_TrayWnd", null) };
+        static int GetState() { var d = TrayData(); return (int)Native.SHAppBarMessage(Native.ABM_GETSTATE, ref d).ToUInt32(); }
+        static void SetState(int st) { var d = TrayData(); d.lParam = new IntPtr(st); Native.SHAppBarMessage(Native.ABM_SETSTATE, ref d); }
 
         public static void SetTaskbarAutoHide(bool on)
         {
-            var d = new Native.APPBARDATA { cbSize = Marshal.SizeOf<Native.APPBARDATA>(), hWnd = Native.FindWindow("Shell_TrayWnd", null) };
-            int state = (int)Native.SHAppBarMessage(Native.ABM_GETSTATE, ref d).ToUInt32();
+            int state = GetState();
             _originalState ??= state;
-            int want = on ? (state | Native.ABS_AUTOHIDE) : (_originalState.Value & Native.ABS_AUTOHIDE) != 0 ? state | Native.ABS_AUTOHIDE : state & ~Native.ABS_AUTOHIDE;
-            if (want == state) return;
-            d.lParam = new IntPtr(want);
-            Native.SHAppBarMessage(Native.ABM_SETSTATE, ref d);
+            if (!on) { RestoreTaskbar(); return; }
+            if ((state & Native.ABS_AUTOHIDE) != 0) return; // zaten otomatik gizli
+            SetState(state | Native.ABS_AUTOHIDE);
+            if ((GetState() & Native.ABS_AUTOHIDE) != 0) return; // Windows ayarı işe yaradı
+            StartFallback();
         }
 
         /// <summary>Kutay Dock kapanırken görev çubuğunu açılıştaki hâline döndürür.</summary>
         public static void RestoreTaskbar()
         {
-            if (_originalState == null) return;
-            var d = new Native.APPBARDATA { cbSize = Marshal.SizeOf<Native.APPBARDATA>(), hWnd = Native.FindWindow("Shell_TrayWnd", null), lParam = new IntPtr(_originalState.Value) };
-            Native.SHAppBarMessage(Native.ABM_SETSTATE, ref d);
+            StopFallback();
+            if (_originalState is { } o && GetState() != o) SetState(o);
+        }
+
+        /// <summary>Önceki bir çalışma çökerek görev çubuklarını gizli bıraktıysa geri getirir.</summary>
+        public static void ShowAllTaskbars()
+        {
+            foreach (var h in Taskbars()) if (!Native.IsWindowVisible(h)) Native.ShowWindow(h, Native.SW_SHOWNA);
+        }
+
+        static System.Collections.Generic.List<IntPtr> Taskbars()
+        {
+            var list = new System.Collections.Generic.List<IntPtr>();
+            Native.EnumWindows((h, _) =>
+            {
+                var c = Native.ClassName(h);
+                if (c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd") list.Add(h);
+                return true;
+            }, IntPtr.Zero);
+            return list;
+        }
+
+        static void StartFallback()
+        {
+            _fallback = true;
+            HideBars();
+            _poll ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _poll.Tick -= Poll; _poll.Tick += Poll;
+            _poll.Start();
+        }
+
+        static void StopFallback()
+        {
+            if (!_fallback) return;
+            _fallback = false; _poll?.Stop();
+            foreach (var h in _hiddenBars) Native.ShowWindow(h, Native.SW_SHOWNA);
+            _hiddenBars.Clear(); _revealed = false;
+        }
+
+        static void HideBars()
+        {
+            foreach (var h in Taskbars())
+                if (Native.IsWindowVisible(h)) { Native.ShowWindow(h, Native.SW_HIDE); _hiddenBars.Add(h); }
+            _revealed = false;
+        }
+
+        static KutayDock.Core.Box B(Native.RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);
+
+        static void Poll(object sender, EventArgs e)
+        {
+            if (!Native.GetCursorPos(out var p)) return;
+            var bars = Taskbars();
+            bool hover = false;
+            foreach (var h in bars)
+            {
+                if (!Native.GetWindowRect(h, out var r)) continue;
+                var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf<Native.MONITORINFO>() };
+                if (!Native.GetMonitorInfo(Native.MonitorFromWindow(h, 2), ref mi)) continue;
+                if (KutayDock.Core.TaskbarGeometry.TriggerStrip(B(r), B(mi.rcMonitor)).Contains(p.X, p.Y) || (_revealed && B(r).Contains(p.X, p.Y, 8))) { hover = true; break; }
+            }
+            // Başlat menüsü, bildirim alanı taşması vb. açıkken çubuk açık kalır
+            var fg = Native.ClassName(Native.GetForegroundWindow());
+            bool shellUi = fg is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "NotifyIconOverflowWindow" or "TopLevelWindowForOverflowXamlIsland" or "Windows.UI.Core.CoreWindow" or "Xaml_WindowedPopupClass";
+            bool keep = hover || shellUi;
+            if (keep && !_revealed)
+            {
+                foreach (var h in bars) { Native.ShowWindow(h, Native.SW_SHOWNA); _hiddenBars.Add(h); }
+                _revealed = true;
+            }
+            else if (!keep)
+            {
+                // Explorer bir çubuğu kendiliğinden geri gösterirse (ör. yeni monitör) tekrar gizle
+                foreach (var h in bars) if (Native.IsWindowVisible(h)) { Native.ShowWindow(h, Native.SW_HIDE); _hiddenBars.Add(h); }
+                _revealed = false;
+            }
         }
     }
 }

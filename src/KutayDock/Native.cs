@@ -43,6 +43,9 @@ namespace KutayDock
         public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 
         [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+        [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+        public const int SW_HIDE = 0, SW_SHOWNA = 8;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
@@ -156,6 +159,58 @@ namespace KutayDock
                 return true;
             }, IntPtr.Zero);
             return list;
+        }
+
+        // ---- Paketli (Mağaza/UWP) uygulamalar: AppUserModelID ----
+        [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IPropertyStore
+        {
+            [PreserveSig] int GetCount(out uint c);
+            [PreserveSig] int GetAt(uint i, out PROPERTYKEY k);
+            [PreserveSig] int GetValue(ref PROPERTYKEY k, out PROPVARIANT v);
+        }
+        [StructLayout(LayoutKind.Sequential)] struct PROPERTYKEY { public Guid fmtid; public uint pid; }
+        [StructLayout(LayoutKind.Explicit, Size = 24)] struct PROPVARIANT { [FieldOffset(0)] public ushort vt; [FieldOffset(8)] public IntPtr p; }
+        [DllImport("shell32.dll")] static extern int SHGetPropertyStoreForWindow(IntPtr h, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IPropertyStore ps);
+        [DllImport("ole32.dll")] static extern int PropVariantClear(ref PROPVARIANT v);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetApplicationUserModelId(IntPtr hProcess, ref int len, StringBuilder sb);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+
+        /// <summary>Pencerenin AppUserModelID'si: önce pencere özellik deposu, sonra (UWP çerçevesi için iç CoreWindow'un) süreci.</summary>
+        public static string AppUserModelId(IntPtr h)
+        {
+            try
+            {
+                var iid = typeof(IPropertyStore).GUID;
+                if (SHGetPropertyStoreForWindow(h, ref iid, out var ps) == 0 && ps != null)
+                {
+                    var key = new PROPERTYKEY { fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), pid = 5 };
+                    if (ps.GetValue(ref key, out var v) == 0)
+                    {
+                        string id = v.vt == 31 ? Marshal.PtrToStringUni(v.p) : null; // VT_LPWSTR
+                        PropVariantClear(ref v);
+                        Marshal.ReleaseComObject(ps);
+                        if (!string.IsNullOrEmpty(id)) return id;
+                    }
+                    else Marshal.ReleaseComObject(ps);
+                }
+            }
+            catch (Exception) { }
+            var target = h;
+            if (ClassName(h) == "ApplicationFrameWindow")
+            {
+                var core = FindWindowEx(h, IntPtr.Zero, "Windows.UI.Core.CoreWindow", null);
+                if (core != IntPtr.Zero) target = core;
+            }
+            GetWindowThreadProcessId(target, out uint pid);
+            IntPtr hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (hp == IntPtr.Zero) return null;
+            try
+            {
+                int len = 256; var sb = new StringBuilder(len);
+                return GetApplicationUserModelId(hp, ref len, sb) == 0 ? sb.ToString() : null;
+            }
+            finally { CloseHandle(hp); }
         }
 
         public static void Activate(IntPtr h)

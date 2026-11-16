@@ -1,4 +1,4 @@
-KUTAY DOCK 1.0  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.1  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,24 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.1'DE NE DEĞİŞTİ
+  + Limitler widget'ı: Grok Bot haftalık limiti; tıklayınca Cursor limitleri paneli.
+  + Depolama widget'ı: C: boş alanı + doluluk çubuğu; tıklayınca tüm diskler.
+  + Ekran görüntüsü widget'ı (ShareX): tıkla = bölge; sağ tık = pencere,
+    monitör, tüm ekran, son bölge, ShareX'i aç.
+  + Aynı uygulamanın birden çok penceresi varsa (ör. 2 Chrome) sol tık
+    pencere başlıklarından seçim listesi açar.
+  + Mağaza/UWP uygulamaları (Ayarlar, Not Defteri vb.) artık gerçek simgeyle
+    görünür (eskiden boş "A" harfi çıkıyordu).
+  + "Görev çubuğunu otomatik gizle" artık çubuk hangi kenardaysa (üst/alt/sol/sağ)
+    ve iki monitörde de çalışır. Önce Windows'un kendi ayarı denenir; Windows
+    bunu reddederse (Windows 11 25H2'de oluyor) Kutay Dock tüm görev çubuklarını
+    gizler, fareyi çubuğun olduğu ekran kenarına götürünce geri gelir.
+    Kutay Dock kapanınca görev çubukları eski hâline döner. Explorer yeniden
+    başlatılmaz, kayıt defteri değiştirilmez.
+  - Kaldırıldı: Claude/Codex, Şimdi çalan (medya), Ekran süresi, Takvim ve
+    takvime bağlı uyarılar. Eski ayarlar otomatik taşınır.
 
 ÇALIŞTIRMA
   1) KutayDock.exe'ye çift tıkla. Kurulum yok, yönetici izni gerekmez.
@@ -18,62 +36,70 @@ Ne bu?
   Otomatik başlatma EKLENMEDİ. İstersen kısayolunu kendin
   shell:startup klasörüne koyarsın.
 
-İLK AYARLAR (önerilen)
-  - Ayarlar > Takvim: Google/Outlook/iCloud "gizli iCal adresi"ni yapıştır.
-  - Ayarlar > Hava durumu: varsayılan İstanbul (41.01, 28.97).
-  - Ayarlar > Yapay zekâ: "Codex (ChatGPT)" seçersen yüzdeler Codex CLI'nin
-    kendi kaydından birebir gelir. "Claude Code" seçersen ~/.claude kayıtlarındaki
-    token'lar sayılır; yüzde, senin gireceğin token limitine göre TAHMİNDİR.
-  - lumabar gibi tam "görev çubuğu yerine" his için: Ayarlar > Davranış >
-    "Windows görev çubuğunu otomatik gizle" (varsayılan KAPALI). Kutay Dock
-    kapanınca görev çubuğu eski hâline döner.
+LİMİTLER: VERİ NEREDEN GELİYOR?
+  - Grok Bot: belgelenmiş bir kullanım API'si yok. Yüzdeyi ve sıfırlanma
+    zamanını Ayarlar > Limitler'e elle girersin. Boşsa kartta
+    "kaynak yok · elle gir" yazar; girdiysen "elle · 2s önce" gibi ne kadar
+    eski olduğu görünür. Sıfırlanma zamanı geçince eski yüzde gösterilmez.
+  - Cursor: kişisel planlar için belgelenmiş bir kullanım API'si yok
+    (Admin API yalnızca Enterprise ekipleri için). Panelde:
+      · Plan adı (ör. Pro+): Cursor CLI'nin belgelenmiş "agent about" komutundan,
+        6 saatte bir, görünmez şekilde. Yalnızca plan adı okunur; e-posta
+        okunmaz/saklanmaz. CLI yoksa "plan bilinmiyor" yazar.
+      · Yüzde ve sıfırlanma: elle (Ayarlar > Limitler), yoksa "Kaynak yok".
+      · "Kullanım sayfasını aç": cursor.com/dashboard (kullanım sekmesi).
+    Cursor uygulamasının token'ı, çerezleri ya da yerel veritabanı OKUNMAZ;
+    belgelenmemiş Cursor API'si kullanılmaz.
 
-HAZIR WIDGET'LAR (gerçekten çalışan çekirdek set, 12 adet)
+EKRAN GÖRÜNTÜSÜ (ShareX)
+  ShareX'in resmi komut satırı eylemleri kullanılır: -RectangleRegion,
+  -ActiveWindow, -ActiveMonitor, -PrintScreen, -LastRegion. Çekilen görüntü
+  ShareX'in kendi "yakalama sonrası" ayarlarına göre kaydedilir/kopyalanır.
+  ShareX.exe otomatik bulunur (C:\Program Files\ShareX\ShareX.exe vb.);
+  başka yerdeyse Ayarlar > Ekran görüntüsü'ne yolu yaz.
+
+HAZIR WIDGET'LAR (11 adet)
   1. Başlat düğmesi ............ Başlat menüsünü açar
-  2. Uygulamalar ............... Görev çubuğuna sabitlenmiş uygulamalar + açık pencereler.
+  2. Uygulamalar ............... Sabitlenmiş uygulamalar + açık pencereler.
                                  Tıkla: aç / öne getir / zaten öndeyse küçült; birden çok
-                                 pencerede sıradakine geçer. Sağ tık: pencere listesi,
-                                 Yeni pencere, Kapat. Üstüne gelince büyür, çalışanların
-                                 altında mavi nokta; çalışmayan sabitlenmiş uygulama kendi kartında.
-  3. Yapay zekâ ................ "Oturum / Haftalık" çubukları, sıfırlanma süresi, yüzde
-  4. Şimdi çalan ............... Spotify/YouTube/her medya: başlık, sanatçı, önceki/oynat/sonraki
-  5. Ses ...................... Kaydırıcı, tekerlekle ayar, simgeye tıkla = sessiz
-  6. Sistem ................... CPU / RAM / GPU halkaları; tıkla = Görev Yöneticisi
-  7. Ağ ....................... İndirme/yükleme hızı + canlı grafik
-  8. Ekran süresi ............. Bugünkü toplam, saatlik sütunlar, en çok kullanılan 5 uygulama
-                                 (yalnızca bu PC'de, %APPDATA%\KutayDock\ekran-suresi.json)
-  9. Takvim ................... Sıradaki etkinlik: "14:30 · 1s 27dk sonra" (iCal, 15 dk'da bir)
- 10. Pil ...................... Mavi pil kartı (pil yoksa, yani masaüstü PC'de görünmez)
- 11. Gizli simgeler (^) ....... Windows tepsi taşma menüsünü açar
- 12. Saat + tarih + hava ...... Türkçe gün adı, saat, Open-Meteo hava durumu
-  + Akıllı uyarılar: toplantıdan X dk önce bildirim ve müziği duraklatma,
-    yapay zekâ limiti eşiği (%85), pil azaldı; sessiz saatlerde (23-08) bekletilir.
+                                 pencere varsa seçim listesi. Sağ tık: pencere listesi,
+                                 Yeni pencere, Kapat.
+  3. Limitler .................. Grok Bot haftalık; tıkla = Cursor paneli
+  4. Ses ...................... Kaydırıcı, tekerlekle ayar, simgeye tıkla = sessiz
+  5. Sistem ................... CPU / RAM / GPU halkaları; tıkla = Görev Yöneticisi
+  6. Ağ ....................... İndirme/yükleme hızı + canlı grafik
+  7. Depolama ................. Sistem diskinin boş alanı + çubuk (%75 turuncu, %90 kırmızı);
+                                 tıkla = tüm diskler, diske tıkla = Explorer'da aç
+  8. Ekran görüntüsü .......... ShareX ile yakalama
+  9. Pil ...................... Pil kartı (masaüstü PC'de görünmez)
+ 10. Gizli simgeler (^) ....... Windows tepsi taşma menüsünü açar
+ 11. Saat + tarih + hava ...... Türkçe gün adı, saat, Open-Meteo hava durumu
+  + Akıllı uyarılar: Grok Bot / Cursor limiti eşiği (%85, elle girilen değere göre),
+    pil azaldı; sessiz saatlerde (23-08) bekletilir.
   + Tam ekran oyun/video varken dock çekilir ve ölçüm yapmaz (oyunda ek yük yok).
-  + Ekranda yer ayırma (AppBar): büyütülmüş pencereler dock'un altına girmez.
-  + 4 stil: Cam (bulanık), Siyah, Gece, Beyaz · Altta/Üstte · 3 boyut · Tam genişlik.
+  + Ekranda yer ayırma (AppBar), 4 stil, Altta/Üstte, 3 boyut, Tam genişlik.
 
 OLMAYANLAR (dürüst liste)
-  - lumabar'ın "100+ widget"ının çoğu yok: Stripe/Polar/Shopify/Gumroad gelir
-    kartları, GitHub, X takipçi, borsa, kripto, WhatsApp, döviz, pomodoro,
-    not, yapılacaklar, dünya saatleri, parlaklık, hızlı ayar (Wi-Fi/Bluetooth) vb.
-  - "Liquid Glass" (arka planı canlı kıran cam) yok; yerine Windows bulanıklığı var.
+  - Grok Bot ve Cursor limitleri otomatik güncellenmez (belgelenmiş kaynak yok).
+  - lumabar'ın "100+ widget"ının çoğu yok (gelir kartları, GitHub, borsa, kripto,
+    pomodoro, yapılacaklar, dünya saatleri, parlaklık, hızlı ayarlar vb.).
+  - "Liquid Glass" yok; yerine Windows bulanıklığı var.
   - Widget'ları sürükle-bırak ile dizme yok; sıra Ayarlar'da oklarla değişir.
-  - Dock'u sürükleyip üste yapıştırma yok; Ayarlar > Konum.
-  - Uygulama grupları, pencere canlı önizlemesi, okunmamış rozetleri yok.
-  - Gerçek tepsi simgeleri ızgarası yok (^ düğmesi Windows'un kendi menüsünü açar).
-  - Claude için resmi limit yüzdesi okunmuyor (resmi yerel kaynak yok), tahmin.
-  - Mağaza (UWP) uygulamalarının penceresi bazen genel simgeyle görünebilir.
-  - Yalnızca ana monitörde çalışır.
+  - Pencere canlı önizlemesi, okunmamış rozetleri yok.
+  - Dock yalnızca ana monitörde durur.
+  - Otomatik gizlemenin yedek yolunda çubuk kenara gelince ~0,15 sn içinde
+    açılır; gizliyken o kenardaki boşluk (çubuk yüksekliği) Windows tarafından
+    ayrılmış kalır. Kutay Dock beklenmedik şekilde öldürülürse (Görev
+    Yöneticisi'nden "görevi sonlandır") görev çubuğu gizli kalabilir: Kutay
+    Dock'u yeniden aç (açılışta çubukları geri getirir) ya da oturumu kapat-aç.
 
 TEST DURUMU
-  - Derleme: hatasız. Mantık katmanı 24 birim testi geçti (iCal, AI kullanım,
-    uyarı motoru, ekran süresi, hava, ayarlar).
-  - Windows'ta henüz HİÇ çalıştırılmadı (box Linux, Kasa çevrimdışıydı).
-    İlk açılışta bir sorun olursa: %APPDATA%\KutayDock\hata.log dosyasını gönder.
+  - Derleme hatasız. Mantık katmanı 28 birim testi geçti (biçim, limitler,
+    Cursor plan okuma, ShareX argümanları, görev çubuğu kenar geometrisi,
+    uyarı motoru, ayar taşıma, hava, ayarlar).
 
 VERİLER
-  %APPDATA%\KutayDock\ayarlar.json      ayarlar
-  %APPDATA%\KutayDock\ekran-suresi.json ekran süresi (35 gün)
+  %APPDATA%\KutayDock\ayarlar.json      ayarlar (elle girilen limitler dahil)
   %APPDATA%\KutayDock\hata.log          hata kaydı
-  Hesap yok, telemetri yok. Dışarı çıkan tek şey: hava durumu (open-meteo.com)
-  ve senin eklediğin iCal adresleri.
+  1.0'dan kalan ekran-suresi.json artık kullanılmıyor; istersen silebilirsin.
+  Hesap yok, telemetri yok. Dışarı çıkan tek şey: hava durumu (open-meteo.com).
