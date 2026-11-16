@@ -219,17 +219,29 @@ namespace KutayDock
             if (!SetForegroundWindow(h)) SwitchToThisWindow(h, true);
         }
 
-        /// <summary>Ön plandaki pencere bulunduğu monitörü tamamen kaplıyor mu (oyun, tam ekran video)?</summary>
+        [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+
+        /// <summary>
+        /// Ön plandaki pencere DOCK'UN monitörünü tam ekran kaplıyor mu (oyun, tam ekran video)? Başka monitördeki
+        /// pencereler, büyütülmüş (maximize) pencereler ve masaüstü/kabuk sınıfları sayılmaz. Karar Core'daki FullscreenRule'da.
+        /// </summary>
         public static bool ForegroundIsFullscreen(IntPtr self)
         {
             IntPtr fg = GetForegroundWindow();
-            if (fg == IntPtr.Zero || fg == self) return false;
-            var cls = ClassName(fg);
-            if (ShellClasses.Contains(cls)) return false;
+            if (fg == IntPtr.Zero || fg == self || self == IntPtr.Zero) return false;
             if (!GetWindowRect(fg, out var r)) return false;
+            if (!MonitorRect(fg, out var fgMon) || !MonitorRect(self, out var dockMon)) return false;
+            return KutayDock.Core.FullscreenRule.HidesDock(Box(r), fgMon, dockMon, IsZoomed(fg), ClassName(fg));
+        }
+
+        static KutayDock.Core.Box Box(RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);
+
+        static bool MonitorRect(IntPtr h, out KutayDock.Core.Box box)
+        {
             var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-            if (!GetMonitorInfo(MonitorFromWindow(fg, 2), ref mi)) return false;
-            return r.Left <= mi.rcMonitor.Left && r.Top <= mi.rcMonitor.Top && r.Right >= mi.rcMonitor.Right && r.Bottom >= mi.rcMonitor.Bottom;
+            bool ok = GetMonitorInfo(MonitorFromWindow(h, 2), ref mi); // MONITOR_DEFAULTTONEAREST (gizli pencere için de çalışır)
+            box = Box(mi.rcMonitor);
+            return ok;
         }
     }
 }

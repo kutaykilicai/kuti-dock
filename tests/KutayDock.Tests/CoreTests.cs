@@ -182,6 +182,53 @@ public class CursorApiTests
         Assert.Equal("Cursor · 5dk önce", Limits.LiveFreshness(DateTimeOffset.Now.AddMinutes(-5), DateTimeOffset.Now));
 }
 
+public class FullscreenRuleTests
+{
+    // Kasa düzeni: orta/ana 2560x1440, solda 1920x1080 (y=272); üçüncü ekran senaryosu için sağda 1920x1080.
+    static readonly Box Main = new(0, 0, 2560, 1440), Left = new(-1920, 272, 0, 1352), Right = new(2560, 0, 4480, 1080);
+
+    [Fact]
+    public void FullscreenOnDockMonitorHides() =>
+        Assert.True(FullscreenRule.HidesDock(Main, Main, Main, false, "UnityWndClass"));
+
+    [Fact]
+    public void FullscreenOnOtherMonitorsDoesNotHide()
+    {
+        Assert.False(FullscreenRule.HidesDock(Left, Left, Main, false, "Chrome_WidgetWin_1"));   // sol ekranda tam ekran video
+        Assert.False(FullscreenRule.HidesDock(Right, Right, Main, false, "UnityWndClass"));      // sağ ekranda oyun
+    }
+
+    [Fact]
+    public void MaximizedWindowIsNotFullscreen()
+    {
+        // Görev çubuğu gizliyken büyütülmüş pencere monitörü 8 px taşarak kaplar; bu tam ekran değildir.
+        var maximized = new Box(-8, -8, 2568, 1448);
+        Assert.False(FullscreenRule.HidesDock(maximized, Main, Main, true, "Chrome_WidgetWin_1"));
+        Assert.True(FullscreenRule.HidesDock(maximized, Main, Main, false, "Chrome_WidgetWin_1")); // F11 / çerçevesiz tam ekran
+    }
+
+    [Fact]
+    public void DesktopAndShellClassesIgnored()
+    {
+        foreach (var c in new[] { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd" })
+            Assert.False(FullscreenRule.HidesDock(Main, Main, Main, false, c));
+    }
+
+    [Fact]
+    public void PartialWindowDoesNotHide() =>
+        Assert.False(FullscreenRule.HidesDock(new Box(0, 70, 2560, 1440), Main, Main, false, "Notepad"));
+
+    [Fact]
+    public void DebounceNeedsStableTicks()
+    {
+        var d = new Debounce(2);
+        Assert.False(d.Observe(true)); Assert.False(d.State);      // 1. tık: henüz değil
+        Assert.True(d.Observe(true)); Assert.True(d.State);        // 2. tık: gizle
+        Assert.False(d.Observe(false)); Assert.False(d.Observe(true)); Assert.True(d.State); // kısa odak değişimi: titreme yok
+        Assert.False(d.Observe(false)); Assert.True(d.Observe(false)); Assert.False(d.State); // göster
+    }
+}
+
 public class ThumbTests
 {
     [Fact]

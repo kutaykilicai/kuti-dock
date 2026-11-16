@@ -1,4 +1,4 @@
-KUTAY DOCK 1.3  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.3.1  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,13 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.3.1'DE NE DEĞİŞTİ
+  + Düzeltme: dock bazen kayboluyordu. "Tam ekranda gizle" yalnızca DOCK'UN
+    monitöründeki tam ekran pencereye bakıyor; başka ekrandaki tam ekran ya da
+    büyütülmüş pencere, masaüstü ve görev çubuğu artık dock'u gizlemiyor.
+    Gizleme/gösterme 2 sn sabit kalınca uygulanır (Alt+Tab'da titreme yok);
+    geri gelince konum ve ayrılan alan yeniden hesaplanır.
 
 1.3'TE NE DEĞİŞTİ
   + İsteğe bağlı Cursor girişi: Ayarlar > Limitler > "Cursor ile giriş yap".
@@ -129,7 +136,7 @@ OLMAYANLAR (dürüst liste)
     Dock'u yeniden aç (açılışta çubukları geri getirir) ya da oturumu kapat-aç.
 
 TEST DURUMU
-  - Derleme hatasız. Mantık katmanı 35 birim testi geçti (biçim, limitler, Cursor yanıt ayrıştırma, önizleme oranı,
+  - Derleme hatasız. Mantık katmanı 41 birim testi geçti (biçim, limitler, Cursor yanıt ayrıştırma, tam ekran/monitör kuralı, önizleme oranı,
     Cursor plan okuma, ShareX argümanları, görev çubuğu kenar geometrisi,
     uyarı motoru, ayar taşıma, hava, ayarlar).
 

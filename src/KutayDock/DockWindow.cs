@@ -27,6 +27,8 @@ namespace KutayDock
         IntPtr _hwnd;
         AppBar _appBar;
         bool _hiddenForFullscreen, _userHidden;
+        // Tam ekran kararı 2 sn (2 tık) aynı kalınca uygulanır: Alt+Tab ve kısa odak değişimlerinde dock titreşmez.
+        readonly Debounce _fullscreen = new(2);
 
         public DockWindow(Services s, Action openSettings, Action exit, Action<string, string> notify)
         {
@@ -152,9 +154,9 @@ namespace KutayDock
         {
             // Tam ekran oyun/video varken dock çekilir ve hiçbir şey ölçülmez (oyunlarda ek yük yok).
             bool fs = _s.Settings.HideOnFullscreen && Native.ForegroundIsFullscreen(_hwnd);
-            if (fs != _hiddenForFullscreen)
+            if (_fullscreen.Observe(fs))
             {
-                _hiddenForFullscreen = fs;
+                _hiddenForFullscreen = _fullscreen.State;
                 UpdateVisibility();
             }
             if (!IsVisible) return;
@@ -168,7 +170,13 @@ namespace KutayDock
         void UpdateVisibility()
         {
             bool show = !_userHidden && !_hiddenForFullscreen;
-            if (show && !IsVisible) { Show(); Place(); }
+            if (show && !IsVisible)
+            {
+                Show();
+                // Gizliyken monitör/çözünürlük/AppBar değişmiş olabilir: yerleşimi düzen bittikten sonra da tazele.
+                Place();
+                Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
+            }
             else if (!show && IsVisible) Hide();
         }
 
