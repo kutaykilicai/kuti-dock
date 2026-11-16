@@ -93,6 +93,7 @@ namespace KutiDock
             // Davranış
             var beh = Card(p, "Davranış");
             beh.Children.Add(Toggle("Ekranda dock için yer ayır (pencereler altına girmez)", _s.ReserveSpace, v => _s.ReserveSpace = v));
+            beh.Children.Add(Toggle("Dock'u ekran kenarında sakla (fare kenara gelince belirir)", _s.AutoHideDock, v => _s.AutoHideDock = v));
             beh.Children.Add(Toggle("Tam ekran oyun/videoda dock'u gizle", _s.HideOnFullscreen, v => _s.HideOnFullscreen = v));
             beh.Children.Add(Toggle("Windows görev çubuğunu otomatik gizle (çıkınca geri gelir)", _s.AutoHideWindowsTaskbar, v => _s.AutoHideWindowsTaskbar = v));
             beh.Children.Add(Toggle("Windows görev çubuğunu tamamen kaldır (dock kapanınca/çökünce geri gelir)", _s.RemoveWindowsTaskbar, v => _s.RemoveWindowsTaskbar = v));
@@ -153,7 +154,7 @@ namespace KutiDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kuti Dock 1.6.2 · MIT · Mac dock motoru: Gravitone (MIT, Stefano Lupano) · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutiDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kuti Dock 1.6.3 · MIT · Mac dock motoru: Gravitone (MIT, Stefano Lupano) · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutiDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }

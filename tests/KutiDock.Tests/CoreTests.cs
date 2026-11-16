@@ -276,7 +276,7 @@ public class FloatingDefaultsTests
     public void NewSettingsFloat()
     {
         var s = new Settings().Migrate();
-        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(7, s.Version);
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(8, s.Version);
         Assert.Equal(1, s.Widgets.IndexOf("search"));
     }
 
@@ -495,7 +495,7 @@ public class MigrationTests
         var s = Settings.Load(p);
         Assert.Equal(DockStyle.Siyah, s.Style);
         Assert.Equal(new[] { "start", "search", "apps", "ai", "volume", "storage", "screenshot", "battery", "warp", "clock" }, s.Widgets);
-        Assert.Equal(7, s.Version);
+        Assert.Equal(8, s.Version);
         // 1.1 dosyası tekrar taşınmaz: kullanıcı Depolama'yı kapattıysa geri gelmez
         s.Widgets.Remove("storage"); s.Save(p);
         Assert.DoesNotContain("storage", Settings.Load(p).Widgets);
@@ -719,7 +719,7 @@ public class V15Tests
         s.Widgets.Remove("warp"); s.RemoveWindowsTaskbar = false; s.Migrate();
         Assert.DoesNotContain("warp", s.Widgets); Assert.False(s.RemoveWindowsTaskbar);
         var f = new Settings().Migrate();
-        Assert.Contains("warp", f.Widgets); Assert.False(f.RemoveWindowsTaskbar);
+        Assert.Contains("warp", f.Widgets); Assert.True(f.RemoveWindowsTaskbar); // 1.6.3: varsayılan açık
         Assert.True(f.Magnification); Assert.True(f.Animations); Assert.False(f.SearchWithEverything);
     }
 }
@@ -734,7 +734,7 @@ public class V16Tests
         {
             var s = new Settings { Version = v, MacDock = true };
             s.Migrate();
-            Assert.False(s.MacDock); Assert.Equal(7, s.Version);
+            Assert.False(s.MacDock); Assert.Equal(8, s.Version);
             s.MacDock = true; s.Migrate();         // kullanıcı ayarlardan açarsa açık kalır
             Assert.True(s.MacDock);
         }
@@ -775,5 +775,54 @@ public class V16Tests
         Assert.Equal("yeni", File.ReadAllText(Path.Combine(neu, "ayarlar.json")));
         Assert.Empty(DataMigration.Run(Path.Combine(root, "yok"), neu));
         Directory.Delete(root, true);
+    }
+}
+
+public class V163Tests
+{
+    [Fact]
+    public void V8MigrationRemovesTaskbarAndHidesDock()
+    {
+        var s = new Settings { Version = 7, RemoveWindowsTaskbar = false, AutoHideDock = false };
+        s.Migrate();
+        Assert.True(s.RemoveWindowsTaskbar); Assert.True(s.AutoHideDock); Assert.Equal(8, s.Version);
+        s.AutoHideDock = false; s.Migrate();          // kullanıcı kapatırsa kapalı kalır
+        Assert.False(s.AutoHideDock);
+        var fresh = new Settings();
+        Assert.True(fresh.RemoveWindowsTaskbar); Assert.True(fresh.AutoHideDock);
+    }
+
+    [Fact]
+    public void AutoHideRevealsAtEdgeAndHidesAfterDelay()
+    {
+        var a = new AutoHide(); var t0 = new DateTime(2026, 11, 17, 1, 0, 0); var d = TimeSpan.FromMilliseconds(600);
+        Assert.True(a.Shown);                                            // açılışta görünür, sonra saklanır
+        Assert.False(a.Update(false, false, false, t0, d));
+        Assert.True(a.Update(false, false, false, t0.AddMilliseconds(650), d)); Assert.False(a.Shown);
+        Assert.False(a.Update(false, false, false, t0.AddSeconds(5), d)); // kenar dışında belirmez
+        Assert.True(a.Update(true, false, false, t0.AddSeconds(6), d)); Assert.True(a.Shown);
+        // dock'un üstünde ya da paneli açıkken saklanmaz
+        Assert.False(a.Update(false, true, false, t0.AddSeconds(10), d));
+        Assert.False(a.Update(false, false, true, t0.AddSeconds(20), d)); Assert.True(a.Shown);
+        // uzaklaşınca gecikmeden önce saklanmaz
+        Assert.False(a.Update(false, false, false, t0.AddSeconds(21), d));
+        Assert.False(a.Update(false, false, false, t0.AddSeconds(21.3), d)); Assert.True(a.Shown);
+        Assert.True(a.Update(false, false, false, t0.AddSeconds(21.7), d)); Assert.False(a.Shown);
+        a.Update(true, false, false, t0.AddSeconds(30), d); a.Reset(); Assert.False(a.Shown); // tam ekran: hemen saklı
+    }
+
+    [Fact]
+    public void EdgeTriggerIsOnTheDockMonitorOnly()
+    {
+        var primary = new Box(0, 0, 2560, 1440); var left = new Box(-1920, 272, 0, 1352);
+        Assert.True(AutoHide.AtEdge(DockEdge.Alt, 1280, 1439, primary));
+        Assert.True(AutoHide.AtEdge(DockEdge.Alt, 5, 1438, primary));
+        Assert.False(AutoHide.AtEdge(DockEdge.Alt, 1280, 1400, primary));
+        Assert.False(AutoHide.AtEdge(DockEdge.Alt, -500, 1351, primary));  // başka monitör
+        Assert.True(AutoHide.AtEdge(DockEdge.Alt, -500, 1351, left));
+        Assert.True(AutoHide.AtEdge(DockEdge.Sol, 0, 700, primary));
+        Assert.True(AutoHide.AtEdge(DockEdge.Sag, 2559, 700, primary));
+        Assert.True(AutoHide.AtEdge(DockEdge.Ust, 100, 0, primary));
+        Assert.False(AutoHide.AtEdge(DockEdge.Sag, 2000, 700, primary));
     }
 }

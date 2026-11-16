@@ -30,6 +30,13 @@ namespace KutiDock.Tiles
                 _hwnd = new WindowInteropHelper(this).Handle;
                 long ex = Native.GetWindowLongPtr(_hwnd, Native.GWL_EXSTYLE).ToInt64();
                 Native.SetWindowLongPtr(_hwnd, Native.GWL_EXSTYLE, new IntPtr(ex | Native.WS_EX_TOOLWINDOW | Native.WS_EX_NOACTIVATE | 0x20 /*WS_EX_TRANSPARENT*/));
+                // Büyümüş simgenin opak pikselleri de tıklamayı/fareyi almasın: altındaki dock alsın
+                HwndSource.FromHwnd(_hwnd)?.AddHook((IntPtr h, int msg, IntPtr w, IntPtr l, ref bool handled) =>
+                {
+                    if (msg != 0x84 /*WM_NCHITTEST*/) return IntPtr.Zero;
+                    handled = true;
+                    return new IntPtr(-1); // HTTRANSPARENT
+                });
             };
         }
 

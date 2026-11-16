@@ -225,21 +225,36 @@ namespace KutiDock.Tiles
             hover.Tick += (_, _) => { hover.Stop(); if (btn.IsMouseOver) Preview((AppItem)outer.Tag, btn); };
             btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; hover.Start(); };
             btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; hover.Stop(); };
+            // Basıldığı andaki ön pencere (Gravitone gibi): bırakana kadar önizleme/menü odağı değiştirse bile doğru karar
+            btn.PreviewMouseLeftButtonDown += (_, _) => _fgAtPress = Native.GetForegroundWindow();
             btn.MouseLeftButtonUp += (_, e) => { Click((AppItem)outer.Tag, btn); e.Handled = true; };
             btn.MouseRightButtonUp += (_, e) => { WindowPreview.CloseCurrent(); Menu((AppItem)outer.Tag, btn); e.Handled = true; };
             return outer;
         }
 
+        IntPtr _fgAtPress;
+
         void Click(AppItem it, FrameworkElement target)
         {
             var alive = it.Windows.Where(Native.IsWindowVisible).ToList();
             if (alive.Count == 0) { Launch(it); return; }
+            var fg = _fgAtPress != IntPtr.Zero ? _fgAtPress : Native.GetForegroundWindow();
+            _fgAtPress = IntPtr.Zero;
+            // 1.6'daki Genie (Mac dock gibi): öndeki pencere simgeye akarak küçülür; dock'tan küçültülmüş pencere simgeden
+            // büyüyerek gelir. Genie olmazsa normal küçültme/öne getirme.
+            int front = alive.IndexOf(fg);
+            if (front >= 0)
+            {
+                WindowPreview.CloseCurrent();
+                if (!Genie(fg, target, false)) Native.ShowWindow(fg, Native.SW_MINIMIZE);
+                _signature = "";
+                return;
+            }
+            var back = alive.FirstOrDefault(h => Native.IsIconic(h) && KutiDock.Mac.Core.ClassicGenie.HasCapture(h));
+            if (back != IntPtr.Zero && Genie(back, target, true)) { WindowPreview.CloseCurrent(); _signature = ""; return; }
             if (alive.Count > 1) { Preview(it, target); return; } // birden çok pencere: önizleme panelinden seç
             WindowPreview.CloseCurrent();
-            var fg = Native.GetForegroundWindow();
-            // 1.6'daki Genie: öndeyse simgeye akarak küçülür, küçültülmüşse simgeden büyüyerek gelir; olmazsa normal yol
-            if (alive[0] == fg) { if (!Genie(alive[0], target, false)) Native.ShowWindow(fg, Native.SW_MINIMIZE); }
-            else if (!(Native.IsIconic(alive[0]) && Genie(alive[0], target, true))) Native.Activate(alive[0]);
+            if (!(Native.IsIconic(alive[0]) && Genie(alive[0], target, true))) Native.Activate(alive[0]);
             _signature = ""; // aktif göstergesini tazele
         }
 

@@ -22,6 +22,9 @@ internal static class ClassicGenie
         DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref value, sizeof(int));
     }
 
+    /// <summary>Pencere dock'tan Genie ile küçültüldü mü (geri gelişi de Genie ile oynar).</summary>
+    public static bool HasCapture(IntPtr hwnd) => Cache.ContainsKey(hwnd);
+
     static bool Ready => _running is null && GenieRenderer.Instance.Available;
 
     /// <summary>Pencereyi Genie ile simgeye küçültür. <paramref name="icon"/>: simgenin ekran dikdörtgeni (piksel).</summary>
@@ -30,9 +33,10 @@ internal static class ClassicGenie
         try
         {
             Prune();
-            if (!Ready || IsIconic(hwnd) || !IsWindowVisible(hwnd) || IsCloaked(hwnd)) return false;
+            if (!Ready) return Skip("minimize", _running is not null ? "another animation is running" : "graphics card not usable");
+            if (IsIconic(hwnd) || !IsWindowVisible(hwnd) || IsCloaked(hwnd)) return Skip("minimize", "window already minimized, hidden or on another desktop");
             var capture = GenieCapture.From(hwnd);
-            if (capture is null) return false;
+            if (capture is null) return Skip("minimize", GenieCapture.LastFailure);
             Remember(hwnd, capture);
             SetTransitions(hwnd, true); // Windows'un kendi küçültmesi altta oynamasın
             var a = new GenieAnimation(capture, icon, edge, expand: false,
@@ -41,8 +45,9 @@ internal static class ClassicGenie
             _running = a;
             if (a.Start(dock)) return true;
             _running = null; SetTransitions(hwnd, false);
+            return Skip("minimize", "overlay could not start");
         }
-        catch (Exception) { _running = null; }
+        catch (Exception ex) { _running = null; Log.Error(ex, "Classic genie"); }
         return false;
     }
 
@@ -51,7 +56,9 @@ internal static class ClassicGenie
     {
         try
         {
-            if (!Ready || !IsIconic(hwnd) || !Cache.TryGetValue(hwnd, out var capture)) return false;
+            if (!Ready) return Skip("restore", _running is not null ? "another animation is running" : "graphics card not usable");
+            if (!IsIconic(hwnd)) return false;
+            if (!Cache.TryGetValue(hwnd, out var capture)) return Skip("restore", "no captured image: the window was not minimized from the Dock");
             SetTransitions(hwnd, true);
             var a = new GenieAnimation(capture, icon, edge, expand: true,
                 started: null, finished: () => WindowActions.Activate(hwnd), durationMs: 460, lingerMs: 140);
@@ -59,8 +66,15 @@ internal static class ClassicGenie
             _running = a;
             if (a.Start(dock)) return true;
             _running = null; SetTransitions(hwnd, false);
+            return Skip("restore", "overlay could not start");
         }
-        catch (Exception) { _running = null; }
+        catch (Exception ex) { _running = null; Log.Error(ex, "Classic genie"); }
+        return false;
+    }
+
+    static bool Skip(string action, string why)
+    {
+        Log.Info($"Classic genie skipped ({action}): {why}");
         return false;
     }
 

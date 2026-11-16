@@ -62,7 +62,7 @@ namespace KutiDock
         static KutiDock.Core.Box? DockReserve;
         static DateTime _lastReclaim;
 
-        static Native.APPBARDATA TrayData() => new() { cbSize = Marshal.SizeOf<Native.APPBARDATA>(), hWnd = Native.FindWindow("Shell_TrayWnd", null) };
+        static Native.APPBARDATA TrayData() => new() { cbSize = Marshal.SizeOf<Native.APPBARDATA>(), hWnd = KutiDock.Mac.Core.TaskbarState.FindExplorerTray() };
         static int GetState() { var d = TrayData(); return (int)Native.SHAppBarMessage(Native.ABM_GETSTATE, ref d).ToUInt32(); }
         static void SetState(int st) { var d = TrayData(); d.lParam = new IntPtr(st); Native.SHAppBarMessage(Native.ABM_SETSTATE, ref d); }
 
@@ -96,7 +96,8 @@ namespace KutiDock
             Native.EnumWindows((h, _) =>
             {
                 var c = Native.ClassName(h);
-                if (c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd") list.Add(h);
+                // Menü çubuğunun kendi tepsi penceresi (bu süreç) görev çubuğu değildir
+                if ((c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd") && Native.GetWindowThreadProcessId(h, out uint pid) != 0 && pid != Environment.ProcessId) list.Add(h);
                 return true;
             }, IntPtr.Zero);
             return list;

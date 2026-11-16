@@ -29,7 +29,7 @@ public sealed class Settings
     public bool HideOnFullscreen { get; set; } = true;
 
     /// <summary>Windows görev çubuğunu dock çalışırken tamamen kaldır (Gravitone yöntemi; kapanınca/çökünce geri gelir).</summary>
-    public bool RemoveWindowsTaskbar { get; set; } = false;
+    public bool RemoveWindowsTaskbar { get; set; } = true; // 1.6.3: varsayılan açık
 
     /// <summary>Arama: Windows araması yerine Everything kullan.</summary>
     public bool SearchWithEverything { get; set; } = false;
@@ -38,6 +38,8 @@ public sealed class Settings
     /// Genie klasik şeritte) + üstte menü çubuğu.
     /// </summary>
     public bool MacDock { get; set; } = false;
+    /// <summary>1.6.3: dock ekran kenarında saklanır, fare kenara gelince belirir.</summary>
+    public bool AutoHideDock { get; set; } = true;
     /// <summary>macOS büyütmesi (imleç çevresindeki simgeler büyür).</summary>
     public bool Magnification { get; set; } = true;
     /// <summary>Açılış sıçraması, dock/panel açılma-kapanma animasyonları.</summary>
@@ -131,6 +133,13 @@ public sealed class Settings
             // 1.6.2: eski klasik dock'a dönüş (Mac büyütmesi, sıçrama ve Genie onun simgelerinde); Mac dock katmanı kapalı
             MacDock = false;
             Version = 7;
+        }
+        if (Version < 8)
+        {
+            // 1.6.3: Windows görev çubuğu tamamen kapalı, dock kenarda saklanır
+            RemoveWindowsTaskbar = true;
+            AutoHideDock = true;
+            Version = 8;
         }
         return this;
     }

@@ -86,12 +86,12 @@ namespace KutiDock
         }
 
         /// <summary>Dock belirir/çekilir: kaydırma + saydamlık (yaklaşık Gravitone gizle/göster hızı).</summary>
-        public static void Slide(Window w, FrameworkElement body, KutiDock.Core.DockEdge edge, bool show, Action done = null)
+        public static void Slide(Window w, FrameworkElement body, KutiDock.Core.DockEdge edge, bool show, Action done = null, double distance = 14)
         {
             if (!Enabled) { w.Opacity = 1; done?.Invoke(); return; }
             var tt = body.RenderTransform as TranslateTransform ?? new TranslateTransform();
             body.RenderTransform = tt;
-            double off = 14 * (edge is KutiDock.Core.DockEdge.Alt or KutiDock.Core.DockEdge.Sag ? 1 : -1);
+            double off = distance * (edge is KutiDock.Core.DockEdge.Alt or KutiDock.Core.DockEdge.Sag ? 1 : -1);
             var prop = edge is KutiDock.Core.DockEdge.Sol or KutiDock.Core.DockEdge.Sag ? TranslateTransform.XProperty : TranslateTransform.YProperty;
             var d = TimeSpan.FromMilliseconds(show ? 220 : 150);
             tt.BeginAnimation(prop, new DoubleAnimation(show ? off : 0, show ? 0 : off, d) { EasingFunction = Out });

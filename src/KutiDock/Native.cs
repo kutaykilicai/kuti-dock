@@ -19,6 +19,7 @@ namespace KutiDock
         [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
         [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+        [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int cmd);
         [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr h, int idx);
         [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr h, int idx, IntPtr v);

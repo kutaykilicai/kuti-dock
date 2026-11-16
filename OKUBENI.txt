@@ -7,6 +7,19 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.3'TE NE DEĞİŞTİ
+- Windows görev çubuğu tamamen kapalı (varsayılan). 1.6.2'de menü çubuğunun tepsi penceresi de "Shell_TrayWnd"
+  adını taşıdığı için gizleme yanlış pencereye bağlanıyordu; tam ekrandan çıkınca çubuk bir an görünüyordu.
+  Artık Explorer'ın çubuğu doğru bulunur ve kendi iş parçacığındaki kancayla gösterildiği anda gizlenir
+  (tam ekran çıkışı, Win tuşu, ekran değişimi, Explorer yeniden başlaması). Başlat menüsü Win ile açılır.
+  Dock kapanır/çökerse bekçi süreci görev çubuğunu geri getirir.
+- Dock ekranın kenarında saklanır; fare kenara gelince kayarak belirir, uzaklaşınca 0,6 sn sonra saklanır
+  (menü, önizleme ya da arama paneli açıkken saklanmaz). Ayarlar > Davranış'tan kapatılabilir.
+- Genie: öndeki pencere simgeye tıklayınca simgeye akarak küçülür (birden çok penceresi olan uygulamada da),
+  dock'tan küçültülen pencere tıklayınca simgeden büyüyerek gelir. Karar, basıldığı andaki ön pencereye göre
+  verilir. Atlanırsa nedeni log.txt'ye yazılır. İlk açılışta simge zıplar; pencere Windows'un kendi açılma
+  animasyonuyla gelir (dış pencereye müdahale edilmez).
+
 1.6.2'DE NE DEĞİŞTİ
 - Eski (1.5) klasik dock geri geldi ve varsayılan: tek şerit; Başlat, Ara, uygulamalar, widget'lar.
   Ayrı Mac dock katmanı varsayılan kapalı (Ayarlar > Mac dock'tan açılabilir); mevcut ayar klasiğe taşınır.

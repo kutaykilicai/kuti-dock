@@ -20,7 +20,7 @@ namespace KutiDock
     {
         public const string GuardArg = "--gorev-cubugu-bekci";
         const string Primary = "Shell_TrayWnd", Secondary = "Shell_SecondaryTrayWnd";
-        const uint EVENT_OBJECT_SHOW = 0x8002, WINEVENT_OUTOFCONTEXT = 0;
+        const uint EVENT_OBJECT_SHOW = 0x8002, WINEVENT_OUTOFCONTEXT = 0, WINEVENT_SKIPOWNPROCESS = 2;
         const int OBJID_WINDOW = 0;
 
         delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
@@ -31,7 +31,7 @@ namespace KutiDock
         static string MarkerPath => Path.Combine(Services.DataDir, "gorev-cubugu.json");
 
         static readonly WinEventProc Proc = OnShow; // yerel kod çağırır: canlı tutulmalı
-        static IntPtr _hook; static uint _hookedPid;
+        static IntPtr _hook;
         static DispatcherTimer _enforce;
         static Process _guard;
         static bool _active;
@@ -106,42 +106,60 @@ namespace KutiDock
             catch (Exception) { return false; }
         }
 
+        static volatile bool _hideNow; // kanca iş parçacığı okur
         static void OnShow(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time)
         {
-            if (obj != OBJID_WINDOW || child != 0 || (!_active && _suppress == 0)) return;
+            if (obj != OBJID_WINDOW || child != 0 || !_hideNow) return;
             var c = Native.ClassName(hwnd);
-            if (c is Primary or Secondary) Native.ShowWindow(hwnd, Native.SW_HIDE);
+            if (c is Primary or Secondary) Native.ShowWindowAsync(hwnd, Native.SW_HIDE);
         }
+
+        // 1.6.3: kanca kendi iş parçacığında. Arayüz meşgulken (tam ekrandan çıkış, dock animasyonu) bile Explorer'ın
+        // gösterdiği görev çubuğu aynı anda geri gizlenir: tam ekrandan çıkışta, Win tuşunda ve ekran değişiminde
+        // kısa süreli görünme olmaz. Tüm süreçler dinlenir ki Explorer yeniden başlayınca yeni çubuk da hemen gizlensin.
+        static Dispatcher _hookThread;
 
         static void Hook()
         {
-            var tray = Native.FindWindow(Primary, null);
-            if (tray == IntPtr.Zero || _hook != IntPtr.Zero) return;
-            Native.GetWindowThreadProcessId(tray, out uint pid);
-            _hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero, Proc, pid, 0, WINEVENT_OUTOFCONTEXT);
-            _hookedPid = _hook != IntPtr.Zero ? pid : 0;
+            _hideNow = true;
+            if (_hook != IntPtr.Zero) return;
+            if (_hookThread == null)
+            {
+                var ready = new ManualResetEventSlim();
+                var t = new Thread(() => { _hookThread = Dispatcher.CurrentDispatcher; ready.Set(); Dispatcher.Run(); })
+                { IsBackground = true, Name = "Kuti Dock görev çubuğu" };
+                t.SetApartmentState(ApartmentState.STA);
+                t.Start();
+                ready.Wait(2000);
+            }
+            _hookThread?.Invoke(() =>
+            {
+                if (_hook == IntPtr.Zero)
+                    _hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero, Proc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            });
         }
 
         static void Unhook()
         {
-            if (_hook != IntPtr.Zero) UnhookWinEvent(_hook);
-            _hook = IntPtr.Zero; _hookedPid = 0;
+            _hideNow = false;
+            if (_hook == IntPtr.Zero) return;
+            var h = _hook; _hook = IntPtr.Zero;
+            _hookThread?.Invoke(() => UnhookWinEvent(h));
         }
 
         static void Enforce(object sender, EventArgs e)
         {
             if (!_active) return;
-            var tray = Native.FindWindow(Primary, null);
+            var tray = Tray();
             if (tray == IntPtr.Zero) return;
             if ((GetState(tray) & Native.ABS_AUTOHIDE) == 0) Hide(); else HideBars();
-            Native.GetWindowThreadProcessId(tray, out uint pid);
-            if (pid != _hookedPid) { Unhook(); Hook(); } // Explorer yeniden başladı
+            if (_hook == IntPtr.Zero) Hook();
             if (_guard == null || _guard.HasExited) StartGuard();
         }
 
         static void Hide()
         {
-            var tray = Native.FindWindow(Primary, null);
+            var tray = Tray();
             if (tray == IntPtr.Zero) return;
             using (Lock())
             {
@@ -153,12 +171,18 @@ namespace KutiDock
             HideBars();
         }
 
+        /// <summary>
+        /// Explorer'ın görev çubuğu. 1.6.3: menü çubuğunun tepsi hizmeti de bir Shell_TrayWnd açıp en üstte tutar; düz
+        /// FindWindow onu bulursa Explorer'ın çubuğu gizlenmez (1.6.2'de tam ekrandan çıkışta görünmesinin nedeni).
+        /// </summary>
+        static IntPtr Tray() => KutiDock.Mac.Core.TaskbarState.FindExplorerTray();
+
         static void HideBars() { foreach (var h in Bars()) if (Native.IsWindowVisible(h)) Native.ShowWindow(h, Native.SW_HIDE); }
 
         static System.Collections.Generic.List<IntPtr> Bars()
         {
             var list = new System.Collections.Generic.List<IntPtr>();
-            var h = Native.FindWindow(Primary, null);
+            var h = Tray();
             if (h != IntPtr.Zero) list.Add(h);
             h = IntPtr.Zero;
             while ((h = Native.FindWindowEx(IntPtr.Zero, h, Secondary, null)) != IntPtr.Zero) list.Add(h);
@@ -172,7 +196,7 @@ namespace KutiDock
             {
                 var m = ReadMarker();
                 if (m == null || m.OwnerPid != ownerPid) return false;
-                var tray = Native.FindWindow(Primary, null);
+                var tray = Tray();
                 if (tray == IntPtr.Zero) return false; // Explorer yok: işaret kalsın, sonraki açılış düzeltir
                 SetState(tray, m.OriginalState);
                 PersistAutoHide((m.OriginalState & Native.ABS_AUTOHIDE) != 0);

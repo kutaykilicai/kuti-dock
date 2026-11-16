@@ -29,7 +29,11 @@ namespace KutiDock
         Theme _theme;
         IntPtr _hwnd;
         AppBar _appBar;
-        bool _hiddenForFullscreen, _userHidden, _hiding;
+        bool _hiddenForFullscreen, _userHidden, _hiding, _autoHidden;
+        // 1.6.3: kenarda saklanma (fare kenara gelince belirir)
+        readonly DispatcherTimer _hoverTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
+        readonly AutoHide _auto = new();
+        bool AutoHideOn => _s.Settings.AutoHideDock && _anchor == StripAnchor.Kenar;
         // Tam ekran 250 ms'de bir yoklanır: video/oyun ≈0,5 sn'de gizler (2 gözlem), dock 2 sn sonra geri gelir (8 gözlem).
         readonly DispatcherTimer _fsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
         readonly Debounce _fullscreen = new(2, 8);
@@ -74,6 +78,8 @@ namespace KutiDock
             _timer.Start();
             _fsTimer.Tick += (_, _) => CheckFullscreen();
             _fsTimer.Start();
+            _hoverTimer.Tick += (_, _) => CheckHover();
+            _hoverTimer.Start();
             ContextMenu = MakeMenu();
         }
 
@@ -218,7 +224,7 @@ namespace KutiDock
             var dpi = VisualTreeHelper.GetDpi(this);
             bool top = set.Edge == DockEdge.Ust;
             // Yer ayırma yalnızca yatay (Üst/Alt) dock için; Sol/Sağ her zaman yüzer.
-            bool reserve = set.ReserveSpace && !DockLayout.Vertical(set.Edge) && _anchor == StripAnchor.Kenar;
+            bool reserve = set.ReserveSpace && !DockLayout.Vertical(set.Edge) && _anchor == StripAnchor.Kenar && !AutoHideOn;
             if (reserve) _appBar.Reserve(top, (int)Math.Ceiling((h + margin * 2) * dpi.DpiScaleY));
             else _appBar.Remove();
             Rect area = reserve ? _appBar.ReservedRect(dpi.DpiScaleX, dpi.DpiScaleY) ?? SystemParameters.WorkArea : SystemParameters.WorkArea;
@@ -241,6 +247,8 @@ namespace KutiDock
             if (_fullscreen.Observe(fs))
             {
                 _hiddenForFullscreen = _fullscreen.State;
+                // Tam ekrandan çıkınca saklı dock kendiliğinden belirmez; fare kenara gelince belirir
+                if (_hiddenForFullscreen && AutoHideOn) { _auto.Reset(); _autoHidden = true; }
                 UpdateVisibility();
             }
         }
@@ -248,7 +256,12 @@ namespace KutiDock
         void Tick()
         {
             // Tam ekran oyun/video varken dock çekilir ve hiçbir şey ölçülmez (oyunlarda ek yük yok).
-            if (!IsVisible) return;
+            if (!IsVisible)
+            {
+                // Yalnızca kenarda saklıyken ölçüm ve uyarılar sürer (tam ekranda/oyunda değil)
+                if (_autoHidden && !_hiddenForFullscreen && !_userHidden) { _s.Tick(); RunAlerts(); }
+                return;
+            }
             _s.Tick();
             Refresh();
             if (_fit != null && NaturalChanged != null)
@@ -262,22 +275,56 @@ namespace KutiDock
 
         public void ToggleUserHidden() { _userHidden = !_userHidden; UpdateVisibility(); }
 
+        /// <summary>Kenarda saklanma: imleç kenarda → belir; dock'tan ve panellerinden uzaklaşınca 0,6 sn sonra saklan.</summary>
+        void CheckHover()
+        {
+            if (!AutoHideOn)
+            {
+                if (_autoHidden) { _autoHidden = false; UpdateVisibility(); }
+                return;
+            }
+            if (_hwnd == IntPtr.Zero || _hiddenForFullscreen || _userHidden || !Native.GetCursorPos(out var p)) return;
+            var mi = new Native.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<Native.MONITORINFO>() };
+            if (!Native.GetMonitorInfo(Native.MonitorFromWindow(_hwnd, 2), ref mi)) return;
+            var mon = new Box(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom);
+            bool over = IsVisible && Native.GetWindowRect(_hwnd, out var r) && new Box(r.Left, r.Top, r.Right, r.Bottom).Contains(p.X, p.Y, 12);
+            if (_auto.Update(AutoHide.AtEdge(_s.Settings.Edge, p.X, p.Y, mon), over, OwnPopupOpen(), DateTime.UtcNow, TimeSpan.FromMilliseconds(600)))
+            {
+                _autoHidden = !_auto.Shown;
+                UpdateVisibility();
+            }
+        }
+
+        /// <summary>Dock'un açtığı menü, açılır panel, önizleme ya da arama paneli açıkken dock saklanmaz.</summary>
+        static bool OwnPopupOpen()
+        {
+            foreach (PresentationSource ps in PresentationSource.CurrentSources)
+            {
+                if (ps is not HwndSource hs || hs.IsDisposed || !Native.IsWindowVisible(hs.Handle)) continue;
+                var rv = hs.RootVisual;
+                if (rv is Tiles.WindowPreview or Tiles.SearchPanel || rv?.GetType().Name == "PopupRoot") return true;
+            }
+            return false;
+        }
+
         void UpdateVisibility()
         {
-            bool show = !_userHidden && !_hiddenForFullscreen;
+            bool show = !_userHidden && !_hiddenForFullscreen && !_autoHidden;
+            // Kenarda saklanırken şerit tamamen dışarı kayar; diğer durumlarda kısa kayma
+            double dist = AutoHideOn ? (DockLayout.Vertical(_s.Settings.Edge) ? ActualWidth : ActualHeight) + 8 : 14;
             if (show && (!IsVisible || _hiding))
             {
                 _hiding = false;
-                if (!IsVisible) Show();
+                if (!IsVisible) { Refresh(); Show(); }
                 // Gizliyken monitör/çözünürlük/AppBar değişmiş olabilir: yerleşimi düzen bittikten sonra da tazele.
                 Place();
                 Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
-                Anim.Slide(this, _body, _s.Settings.Edge, true);
+                Anim.Slide(this, _body, _s.Settings.Edge, true, null, dist);
             }
             else if (!show && IsVisible && !_hiding)
             {
                 _hiding = true;
-                Anim.Slide(this, _body, _s.Settings.Edge, false, () => { if (_hiding) { _hiding = false; Hide(); } });
+                Anim.Slide(this, _body, _s.Settings.Edge, false, () => { if (_hiding) { _hiding = false; Hide(); } }, dist);
             }
         }
 
@@ -301,7 +348,7 @@ namespace KutiDock
 
         protected override void OnClosed(EventArgs e)
         {
-            _timer.Stop(); _fsTimer.Stop();
+            _timer.Stop(); _fsTimer.Stop(); _hoverTimer.Stop();
             if (_alertOwner == this) _alertOwner = null;
             _appBar?.Remove();
             base.OnClosed(e);
