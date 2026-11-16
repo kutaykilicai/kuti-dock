@@ -115,6 +115,73 @@ public class TaskbarGeometryTests
     }
 }
 
+public class CursorApiTests
+{
+    // Not: gerçek yanıt yapısı bilinmiyor; alan adları Nowdex 1.4.1 dizelerinden. Ayrıştırıcı alanları her derinlikte arar.
+    [Fact]
+    public void SandUsagePercentAndResetFlatOrNested()
+    {
+        var flat = CursorApi.ParseSand("{\"isEnabled\":true,\"hasNonZeroIncludedLimit\":true,\"usagePercent\":49.5,\"nextResetTimestampUtc\":\"2026-11-17T10:07:00Z\"}")!;
+        Assert.True(flat.Enabled); Assert.Equal(49.5, flat.Percent);
+        Assert.Equal(new DateTimeOffset(2026, 11, 17, 13, 7, 0, TimeSpan.FromHours(3)), flat.ResetsAt); // UTC+3'te Sal 13:07
+        var nested = CursorApi.ParseSand("{\"status\":{\"planUsage\":{\"totalPercentUsed\":\"12\",\"nextResetTimestampUtc\":\"1795428420000\"}}}")!;
+        Assert.Equal(12, nested.Percent);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1795428420000), nested.ResetsAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1795428420), CursorApi.ParseSand("{\"nextResetTimestampUtc\":1795428420}")!.ResetsAt);
+    }
+
+    [Fact]
+    public void SandDisabledAndGarbage()
+    {
+        Assert.False(CursorApi.ParseSand("{\"isEnabled\":true,\"includedLimitZero\":true}")!.Enabled);
+        Assert.False(CursorApi.ParseSand("{\"isEnabled\":false}")!.Enabled);
+        Assert.Null(CursorApi.ParseSand("<html>")); Assert.Null(CursorApi.ParseSand("{}")!.Percent);
+        Assert.Equal(100, CursorApi.ParseSand("{\"usagePercent\":130}")!.Percent);
+    }
+
+    [Fact]
+    public void UsageSummaryCentsToDollars()
+    {
+        var json = "{\"billingCycleEnd\":\"2026-12-01T00:00:00.000Z\",\"membershipType\":\"pro_plus\",\"individualUsage\":{\"plan\":{\"enabled\":true,\"used\":1500,\"limit\":6000,\"autoPercentUsed\":10,\"apiPercentUsed\":20},\"onDemand\":{\"enabled\":true,\"used\":250,\"limit\":2000}}}";
+        var u = CursorApi.ParseSummary(json)!;
+        Assert.Equal("pro_plus", u.Membership);
+        Assert.Equal(25, u.TotalPercent); // totalPercentUsed yoksa used/limit
+        Assert.Equal(10, u.AutoPercent); Assert.Equal(20, u.ApiPercent);
+        Assert.Equal(15, u.UsedDollars); Assert.Equal(60, u.LimitDollars);
+        Assert.True(u.OnDemandEnabled); Assert.Equal(2.5, u.OnDemandUsedDollars); Assert.Equal(20, u.OnDemandLimitDollars);
+        Assert.Equal(new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero), u.CycleEnd);
+        Assert.Equal(33, CursorApi.ParseSummary("{\"individualUsage\":{\"plan\":{\"totalPercentUsed\":33}}}")!.TotalPercent);
+    }
+
+    [Fact]
+    public void LoginUrlsAndPkce()
+    {
+        var v = CursorApi.NewVerifier();
+        Assert.Equal(43, v.Length); Assert.DoesNotContain("=", v);
+        // RFC 7636 Ek B örneği
+        Assert.Equal("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", CursorApi.Challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
+        var id = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        Assert.Equal("https://cursor.com/loginDeepControl?challenge=abc&uuid=11111111-2222-3333-4444-555555555555&mode=login", CursorApi.LoginUrl("abc", id));
+        Assert.Equal("https://api2.cursor.sh/auth/poll?uuid=11111111-2222-3333-4444-555555555555&verifier=x-y_z", CursorApi.PollUrl(id, "x-y_z"));
+        Assert.Equal("tok", CursorApi.ParsePoll("{\"accessToken\":\"tok\",\"refreshToken\":\"r\"}"));
+        Assert.Null(CursorApi.ParsePoll("{}")); Assert.Null(CursorApi.ParsePoll("bekle"));
+    }
+
+    [Fact]
+    public void SessionCookieFromJwtSub()
+    {
+        static string B(string s) => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(s)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var jwt = B("{\"alg\":\"none\"}") + "." + B("{\"sub\":\"auth0|user_ABC123\",\"exp\":1}") + ".imza";
+        Assert.Equal("WorkosCursorSessionToken=user_ABC123%3A%3A" + jwt, CursorApi.SessionCookie(jwt));
+        Assert.Null(CursorApi.SessionCookie("duz-metin"));
+        Assert.Null(CursorApi.SessionCookie("a." + B("{\"x\":1}") + ".b"));
+    }
+
+    [Fact]
+    public void LiveFreshnessLabel() =>
+        Assert.Equal("Cursor · 5dk önce", Limits.LiveFreshness(DateTimeOffset.Now.AddMinutes(-5), DateTimeOffset.Now));
+}
+
 public class ThumbTests
 {
     [Fact]

@@ -1,12 +1,15 @@
 # Kutay Dock
 
-Windows 10/11 için ekranın altında yüzen, canlı widget'lı akıllı dock. C# / .NET 8 / WPF. Sürüm 1.2.
+Windows 10/11 için ekranın altında yüzen, canlı widget'lı akıllı dock. C# / .NET 8 / WPF. Sürüm 1.3.
 
 Widget'lar: Başlat, Uygulamalar (Windows 11 tarzı canlı pencere önizlemesi, UWP simgeleri), Limitler (Grok Bot;
 tıklayınca Cursor), Ses, Sistem, Ağ, Depolama, Ekran görüntüsü (ShareX), Pil, Gizli simgeler, Saat/hava.
 İsteğe bağlı: Windows görev çubuğunu (hangi kenarda olursa olsun, çoklu monitör) otomatik gizleme.
 
 ### Limit verisinin kaynağı
+- **İsteğe bağlı Cursor girişi (1.3):** Ayarlar'daki düğmeyle Kutay Dock kendi Cursor oturumunu açar (tarayıcıda onay,
+  belirteç DPAPI ile şifreli). Grok Bot yüzdesi/sıfırlanması ve Cursor kullanım özeti Cursor'un **belgelenmemiş** dahili
+  uç noktalarından okunur; Cursor değiştirirse çalışmayabilir, belirteç tüm hesaba erişir. Giriş yoksa aşağıdaki elle yol.
 - **Grok Bot:** belgelenmiş kullanım API'si yok → değerler Ayarlar'dan elle girilir ("kaynak yok · elle gir").
 - **Cursor:** plan adı Cursor CLI'nin belgelenmiş `agent about --format json` komutundan (yalnızca
   `subscriptionTier`); yüzde elle girilir, panelden cursor.com kullanım sayfası açılır. Cursor uygulamasının

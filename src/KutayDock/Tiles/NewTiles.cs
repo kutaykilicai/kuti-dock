@@ -77,16 +77,26 @@ namespace KutayDock.Tiles
         public override void Refresh()
         {
             var now = DateTimeOffset.Now;
-            var l = S.Settings.GrokBot;
+            var (l, live) = S.GrokBotLimit();
             var f = Limits.Fraction(l, now);
             _bar.Value = f ?? 0; _bar.Fill = Color(f ?? 0); _bar.InvalidateVisual();
             _pct.Text = f is { } v ? $"%{v * 100:0}" : "—";
-            _reset.Text = Limits.ResetLabel(l, now);
-            _fresh.Text = Limits.Freshness(l, now);
+            _reset.Text = Limits.ResetLabel(l, now); // yerel saat (Kasa: UTC+3)
+            var c = S.Cursor;
+            _fresh.Text = c.SignedIn && c.NeedsRelogin ? "yeniden giriş gerekli"
+                : live ? Limits.LiveFreshness(l.UpdatedAt ?? now, now)
+                : c.SignedIn && c.Sand is { Enabled: false } ? "Grok Bot kotası yok"
+                : Limits.Freshness(l, now);
+            _fresh.Foreground = c.SignedIn && c.NeedsRelogin ? Theme.Orange : T.FgDim;
         }
 
-        void ShowCursor()
+        void ShowCursor() => ShowCursor(true);
+
+        void ShowCursor(bool fetch)
         {
+            var acc = S.Cursor;
+            if (fetch && acc.SignedIn && !acc.NeedsRelogin)
+                _ = acc.RefreshSummary().ContinueWith(_ => Dispatcher.BeginInvoke(new Action(() => { if (_popup?.IsOpen == true) ShowCursor(false); })));
             var now = DateTimeOffset.Now;
             var c = S.Settings.Cursor;
             var f = Limits.Fraction(c, now);
@@ -97,7 +107,11 @@ namespace KutayDock.Tiles
             DockPanel.SetDock(chip, Dock.Right); head.Children.Add(chip);
             head.Children.Add(Ui.Text("Cursor", 15, Brushes.White, FontWeights.SemiBold));
             p.Children.Add(head);
-            if (f is { } v)
+            if (acc.SignedIn && acc.Summary is { } sum)
+            {
+                AddSummary(p, sum, acc.SummaryAt ?? now, now);
+            }
+            else if (f is { } v)
             {
                 var row = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
                 var pct = Ui.Text($"%{v * 100:0}", 13, Brushes.White, FontWeights.SemiBold);
@@ -108,12 +122,15 @@ namespace KutayDock.Tiles
             }
             else
             {
-                var t = Ui.Text("Kaynak yok: Cursor kişisel planlar için belgelenmiş bir kullanım API'si sunmuyor. Değeri kullanım sayfasından bakıp elle gir.", 11, Theme.B("#99F5F5F7"));
+                var msg = acc.SignedIn && acc.NeedsRelogin ? "Cursor oturumu geçersiz: Ayarlar > Limitler'den yeniden giriş yap. Şimdilik elle girilen değerler gösteriliyor."
+                    : acc.SignedIn ? "Cursor kullanım özeti alınıyor…"
+                    : "Kaynak yok: Ayarlar > Limitler'den \"Cursor ile giriş yap\" ya da değeri kullanım sayfasından bakıp elle gir.";
+                var t = Ui.Text(msg, 11, acc.SignedIn && acc.NeedsRelogin ? Theme.Orange : Theme.B("#99F5F5F7"));
                 t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280; t.Margin = new Thickness(0, 8, 0, 0);
                 p.Children.Add(t);
             }
-            var g = S.Settings.GrokBot;
-            p.Children.Add(Ui.Text($"Grok Bot haftalık: {(Limits.Fraction(g, now) is { } gv ? $"%{gv * 100:0}" : "—")} · {Limits.ResetLabel(g, now)}", 11, Theme.B("#99F5F5F7")));
+            var (g, live) = S.GrokBotLimit();
+            p.Children.Add(Ui.Text($"Grok Bot haftalık: {(Limits.Fraction(g, now) is { } gv ? $"%{gv * 100:0}" : "—")} · {Limits.ResetLabel(g, now)} · {(live ? "Cursor" : "elle")}", 11, Theme.B("#99F5F5F7")));
             var links = new WrapPanel();
             links.Children.Add(Pop.Link("Kullanım sayfasını aç", () => { _popup.IsOpen = false; Run("https://cursor.com/dashboard?tab=usage"); }));
             links.Children.Add(Pop.Link("Değerleri gir…", () => { _popup.IsOpen = false; _openSettings(); }));
@@ -121,6 +138,31 @@ namespace KutayDock.Tiles
             if (_popup != null) _popup.IsOpen = false;
             _popup = Pop.Make(this, p, S.Settings.Edge == DockEdge.Ust);
             _popup.IsOpen = true;
+        }
+
+        static void AddSummary(StackPanel p, UsageSummary u, DateTimeOffset at, DateTimeOffset now)
+        {
+            var dim = Theme.B("#99F5F5F7");
+            void BarRow(string name, double? pct)
+            {
+                if (pct is not { } v) return;
+                var row = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
+                var t = Ui.Text($"%{v:0}", 12, Brushes.White, FontWeights.SemiBold);
+                DockPanel.SetDock(t, Dock.Right); row.Children.Add(t);
+                var n = Ui.Text(name, 11, dim); n.Width = 60; DockPanel.SetDock(n, Dock.Left); row.Children.Add(n);
+                row.Children.Add(new Bar { Height = 6, Value = Format.Clamp01(v / 100), Fill = Color(v / 100), Track = Theme.B("#33FFFFFF"), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+                p.Children.Add(row);
+            }
+            BarRow("Toplam", u.TotalPercent);
+            BarRow("Auto", u.AutoPercent);
+            BarRow("API", u.ApiPercent);
+            var tr = Format.Tr;
+            if (u.UsedDollars is { } used && u.LimitDollars is { } lim)
+                p.Children.Add(Ui.Text($"Dahil kullanım: ${used.ToString("0.00", tr)} / ${lim.ToString("0.00", tr)}", 11, dim));
+            if (u.OnDemandEnabled)
+                p.Children.Add(Ui.Text($"İsteğe bağlı: ${(u.OnDemandUsedDollars ?? 0).ToString("0.00", tr)}" + (u.OnDemandLimitDollars is { } ol ? $" / ${ol.ToString("0.00", tr)}" : ""), 11, dim));
+            var end = u.CycleEnd is { } e ? $"Dönem sonu: {e.ToLocalTime().ToString("d MMM HH:mm", tr)} · " : "";
+            p.Children.Add(Ui.Text($"{end}{Limits.LiveFreshness(at, now)}", 11, dim));
         }
 
         static Brush Color(double f) => f >= 0.9 ? Theme.Red : f >= 0.75 ? Theme.Orange : Theme.Green;

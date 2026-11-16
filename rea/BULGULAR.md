@@ -67,4 +67,8 @@ uygulaması olduğu ve box'ta çalıştırılamadığı için defter GEREKSINIML
   belgelenmemiş dahili uç noktaları çağırıyor: `cursor.com/api/dashboard/get-sand-usage-status` ("sand" = Grok Bot;
   alanlar: hasNonZeroIncludedLimit, includedLimitZero, nextResetTimestampUtc, sandTrialExpiresAt), `cursor.com/api/usage-summary`
   (WorkosCursorSessionToken çerezi ile) ve `api2.cursor.sh/aiserver.v1.DashboardService/*` (GetCurrentPeriodUsage, GetPlanInfo).
-- Karar: belgelenmemiş dahili API + oturum belirteci gerektirdiği için Kutay Dock'a EKLENMEDİ; Kutay'ın kararı bekleniyor.
+- Karar (1.2): belgelenmemiş dahili API + oturum belirteci gerektirdiği için eklenmedi.
+- Karar (1.3): Kutay riski kabul etti; davranış özgün C# ile yazıldı (src/KutayDock.Core/CursorUsage.cs, src/KutayDock/CursorAccount.cs).
+  Varsayımlar: giriş adresi parametreleri (challenge/uuid/mode=login), yoklama yanıtındaki accessToken alanı, çerez biçimi
+  (JWT sub '|' sonrası + %3A%3A + belirteç), get-sand-usage-status için POST {} (405 ise GET), usage-summary tutarlarının sent olması.
+  Canlı uç noktaya istek atılmadı (Kutay'ın belirteci yok); ayrıştırma yalnızca birim testleriyle doğrulandı.

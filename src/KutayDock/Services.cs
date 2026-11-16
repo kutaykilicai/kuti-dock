@@ -30,6 +30,20 @@ namespace KutayDock
         public List<DriveInfo> Drives = new(); DateTime _drivesAt = DateTime.MinValue;
         /// <summary>Cursor planı, Cursor CLI'nin belgelenmiş "agent about --format json" komutundan.</summary>
         public string CursorTier; DateTime _tierAt = DateTime.MinValue;
+        /// <summary>Kutay Dock'un kendi Cursor girişi (isteğe bağlı; belgelenmemiş API).</summary>
+        public readonly CursorAccount Cursor = new();
+
+        /// <summary>
+        /// Grok Bot limiti: girişliyse ve son 30 dk'da okunduysa Cursor'dan gelen değer (live = true),
+        /// değilse elle girilen değer.
+        /// </summary>
+        public (ManualLimit Limit, bool Live) GrokBotLimit()
+        {
+            var c = Cursor;
+            if (c.SignedIn && !c.NeedsRelogin && c.Sand is { Enabled: true, Percent: not null } s && c.SandAt is { } at && DateTimeOffset.Now - at < TimeSpan.FromMinutes(30))
+                return (new ManualLimit { Percent = s.Percent, ResetsAt = s.ResetsAt, UpdatedAt = at }, true);
+            return (Settings.GrokBot, false);
+        }
 
         PerformanceCounterHelper _gpu;
         bool _busyWeather, _busyTier; volatile bool _busyGpu;
@@ -103,6 +117,7 @@ namespace KutayDock
                 catch (Exception) { }
             }
             if (!_busyTier && (now - _tierAt).TotalHours >= 6) { _busyTier = true; _ = LoadCursorTier(); }
+            _ = Cursor.RefreshSand(); // kendi içinde 5 dk sınırı var
         }
 
         public void InvalidateData() { _weatherAt = DateTime.MinValue; _drivesAt = DateTime.MinValue; }

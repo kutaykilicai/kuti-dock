@@ -1,4 +1,4 @@
-KUTAY DOCK 1.2  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.3  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,26 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.3'TE NE DEĞİŞTİ
+  + İsteğe bağlı Cursor girişi: Ayarlar > Limitler > "Cursor ile giriş yap".
+    Tarayıcıda Cursor giriş sayfası açılır, onaylayınca Grok Bot yüzdesi ve
+    sıfırlanma zamanı (yerel saatle) 5 dakikada bir Cursor'dan okunur.
+    Limitler paneli açılınca Cursor kullanım özeti (Toplam/Auto/API yüzdeleri,
+    dahil ve isteğe bağlı harcama, dönem sonu) bir kez okunur.
+    Hata olursa sessizce elle girilen değerlere dönülür; oturum geçersizse
+    kartta turuncu "yeniden giriş gerekli" yazar. Elle giriş seçeneği duruyor.
+
+  RİSKLER (Kutay kabul etti)
+  - Cursor'un BELGELENMEMİŞ dahili API'si kullanılıyor
+    (cursor.com/api/dashboard/get-sand-usage-status, cursor.com/api/usage-summary);
+    Cursor haber vermeden değiştirebilir, o zaman widget elle değere döner.
+  - Oturum belirteci TÜM Cursor hesabına erişir. Yalnızca bu PC'de,
+    %APPDATA%\KutayDock\cursor-oturum.bin içinde Windows DPAPI (yalnızca bu
+    Windows kullanıcısı çözebilir) ile şifreli durur; loglara yazılmaz.
+    "Çıkış yap" dosyayı siler. Bu dosyayı kimseyle paylaşma.
+  - Cursor/Grok Bot uygulamalarının belirteçleri, çerezleri ya da yerel
+    veritabanı OKUNMAZ; belirteç yalnızca Kutay Dock'un kendi girişinden gelir.
 
 1.2'DE NE DEĞİŞTİ
   + Pencere önizleme paneli (Windows 11 görev çubuğu gibi): uygulama simgesinin
@@ -48,6 +68,8 @@ Ne bu?
   shell:startup klasörüne koyarsın.
 
 LİMİTLER: VERİ NEREDEN GELİYOR?
+  - 1.3'ten itibaren Cursor ile giriş yaptıysan Grok Bot ve Cursor kullanımı
+    Cursor'dan okunur (yukarıdaki riskler). Giriş yoksa:
   - Grok Bot: belgelenmiş bir kullanım API'si yok. Yüzdeyi ve sıfırlanma
     zamanını Ayarlar > Limitler'e elle girersin. Boşsa kartta
     "kaynak yok · elle gir" yazar; girdiysen "elle · 2s önce" gibi ne kadar
@@ -91,10 +113,9 @@ HAZIR WIDGET'LAR (11 adet)
   + Ekranda yer ayırma (AppBar), 4 stil, Altta/Üstte, 3 boyut, Tam genişlik.
 
 OLMAYANLAR (dürüst liste)
-  - Grok Bot ve Cursor limitleri otomatik güncellenmez (belgelenmiş kaynak yok).
-    Nowdex gibi uygulamalar bunu Cursor hesabıyla giriş yapıp Cursor'un
-    belgelenmemiş dahili uç noktalarından okuyor; bu yol Kutay'ın onayı olmadan
-    eklenmedi.
+  - Cursor girişi yapılmadıysa Grok Bot ve Cursor limitleri otomatik güncellenmez.
+  - Cursor girişinin otomatik yenilemesi yok: oturum süresi dolunca "yeniden
+    giriş gerekli" uyarısı çıkar, Ayarlar'dan tekrar giriş yapılır.
   - lumabar'ın "100+ widget"ının çoğu yok (gelir kartları, GitHub, borsa, kripto,
     pomodoro, yapılacaklar, dünya saatleri, parlaklık, hızlı ayarlar vb.).
   - "Liquid Glass" yok; yerine Windows bulanıklığı var.
@@ -108,12 +129,14 @@ OLMAYANLAR (dürüst liste)
     Dock'u yeniden aç (açılışta çubukları geri getirir) ya da oturumu kapat-aç.
 
 TEST DURUMU
-  - Derleme hatasız. Mantık katmanı 29 birim testi geçti (biçim, limitler, önizleme oranı,
+  - Derleme hatasız. Mantık katmanı 35 birim testi geçti (biçim, limitler, Cursor yanıt ayrıştırma, önizleme oranı,
     Cursor plan okuma, ShareX argümanları, görev çubuğu kenar geometrisi,
     uyarı motoru, ayar taşıma, hava, ayarlar).
 
 VERİLER
   %APPDATA%\KutayDock\ayarlar.json      ayarlar (elle girilen limitler dahil)
-  %APPDATA%\KutayDock\hata.log          hata kaydı
+  %APPDATA%\KutayDock\hata.log          hata kaydı (belirteç asla yazılmaz)
+  %APPDATA%\KutayDock\cursor-oturum.bin  Cursor oturumu (DPAPI ile şifreli; yalnızca girişte)
   1.0'dan kalan ekran-suresi.json artık kullanılmıyor; istersen silebilirsin.
-  Hesap yok, telemetri yok. Dışarı çıkan tek şey: hava durumu (open-meteo.com).
+  Hesap yok, telemetri yok. Dışarı çıkan: hava durumu (open-meteo.com) ve
+  yalnızca Cursor girişi yaptıysan cursor.com / api2.cursor.sh istekleri.

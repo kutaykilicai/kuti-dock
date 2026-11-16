@@ -184,7 +184,7 @@ namespace KutayDock
 
         void RunAlerts()
         {
-            var input = new AlertInput(DateTimeOffset.Now, _s.Settings.GrokBot, _s.Settings.Cursor, _s.Battery, _s.Charging);
+            var input = new AlertInput(DateTimeOffset.Now, _s.GrokBotLimit().Limit, _s.Settings.Cursor, _s.Battery, _s.Charging);
             foreach (var a in _alerts.Evaluate(_s.Settings, input))
                 if (!string.IsNullOrEmpty(a.Title)) _notify(a.Title, a.Body);
         }

@@ -16,6 +16,7 @@ namespace KutayDock
         readonly Settings _orig;
         readonly Settings _s;
         readonly Action<Settings> _apply;
+        readonly CursorAccount _cursor;
 
         static readonly (string id, string name)[] AllWidgets =
         {
@@ -24,9 +25,9 @@ namespace KutayDock
             ("storage", "Depolama (disk boş alanı)"), ("screenshot", "Ekran görüntüsü (ShareX)"), ("battery", "Pil (yalnızca dizüstü)"), ("tray", "Gizli tepsi simgeleri (^)"), ("clock", "Saat, tarih ve hava durumu"),
         };
 
-        public SettingsWindow(Settings current, Action<Settings> apply)
+        public SettingsWindow(Settings current, Action<Settings> apply, CursorAccount cursor)
         {
-            _orig = current; _apply = apply;
+            _orig = current; _apply = apply; _cursor = cursor;
             _s = Settings.Deserialize<Settings>(Settings.Serialize(current)); // kopya
             Title = "Kutay Dock · Ayarlar"; Width = 620; Height = 760; MinWidth = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -114,8 +115,9 @@ namespace KutayDock
 
             // Limitler
             var lim = Card(p, "Limitler");
-            lim.Children.Add(new TextBlock { Text = "Grok Bot ve Cursor kişisel planlar için belgelenmiş bir kullanım API'si sunmuyor; bu yüzden yüzdeyi ve sıfırlanma zamanını buraya elle gir (boş = kaynak yok). Cursor planı (ör. Pro+) Cursor CLI'nin \"agent about\" komutundan okunur. Tarih biçimi: 17.11.2026 13:07", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap });
-            LimitFields(lim, "Grok Bot", _s.GrokBot);
+            lim.Children.Add(new TextBlock { Text = "İstersen Cursor hesabınla giriş yap: Grok Bot yüzdesi ve sıfırlanma zamanı 5 dakikada bir Cursor'dan okunur. Yoksa ya da okunamazsa aşağıdaki elle girilen değerler kullanılır (boş = kaynak yok). Cursor planı (ör. Pro+) Cursor CLI'nin \"agent about\" komutundan okunur. Tarih biçimi: 17.11.2026 13:07", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap });
+            CursorLogin(lim);
+            LimitFields(lim, "Grok Bot (elle; giriş yoksa ya da okunamazsa kullanılır)", _s.GrokBot);
             LimitFields(lim, "Cursor", _s.Cursor);
 
             // Ekran görüntüsü
@@ -133,12 +135,53 @@ namespace KutayDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.2 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.3 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }
 
         static SolidColorBrush Brush(string hex) => Theme.B(hex);
+
+        void CursorLogin(Panel parent)
+        {
+            var box = new StackPanel { Margin = new Thickness(0, 8, 0, 4) };
+            var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
+            var login = new Button { Content = "Cursor ile giriş yap", Margin = new Thickness(0, 0, 8, 0) };
+            var logout = new Button { Content = "Çıkış yap" };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            buttons.Children.Add(login); buttons.Children.Add(logout);
+            box.Children.Add(status); box.Children.Add(buttons);
+            box.Children.Add(new TextBlock
+            {
+                Text = "Risk: Cursor'un belgelenmemiş dahili API'si kullanılır; Cursor değiştirirse çalışmayabilir. Oturum belirteci tüm Cursor hesabına erişir; yalnızca bu PC'de, Windows'un kullanıcıya özel şifrelemesiyle (DPAPI) saklanır. \"Çıkış yap\" belirteci siler.",
+                Foreground = Brush("#9A9AA0"), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
+            });
+            string message = null;
+            void Render()
+            {
+                status.Text = message ?? (_cursor.LoggingIn ? "Tarayıcıda Cursor girişini onayla… (5 dk)"
+                    : !_cursor.SignedIn ? "Cursor girişi yok (elle girilen değerler kullanılıyor)."
+                    : _cursor.NeedsRelogin ? "Oturum geçersiz: yeniden giriş yap."
+                    : _cursor.SandAt is { } t ? $"Girişli. Grok Bot son okuma: {t.ToLocalTime():HH:mm}"
+                    : "Girişli. Grok Bot kullanımı okunuyor…");
+                status.Foreground = _cursor.SignedIn && _cursor.NeedsRelogin ? Theme.Orange : Brushes.White;
+                login.Content = _cursor.LoggingIn ? "Girişi iptal et" : _cursor.SignedIn ? "Yeniden giriş yap" : "Cursor ile giriş yap";
+                logout.IsEnabled = _cursor.SignedIn;
+            }
+            void OnChanged() => Dispatcher.BeginInvoke(new Action(Render));
+            _cursor.Changed += OnChanged;
+            Closed += (_, _) => _cursor.Changed -= OnChanged;
+            login.Click += async (_, _) =>
+            {
+                if (_cursor.LoggingIn) { _cursor.CancelLogin(); return; }
+                message = null; Render();
+                message = await _cursor.LoginAsync(); // tarayıcı yalnızca bu düğmeyle açılır
+                Render(); message = null;
+            };
+            logout.Click += (_, _) => { _cursor.Logout(); message = "Çıkış yapıldı, belirteç silindi."; Render(); message = null; };
+            Render();
+            parent.Children.Add(box);
+        }
 
         static void LimitFields(Panel parent, string name, ManualLimit l)
         {

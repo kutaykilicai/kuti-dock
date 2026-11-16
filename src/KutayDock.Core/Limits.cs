@@ -30,6 +30,9 @@ public static class Limits
         return $"elle · {Format.Duration(now - u)} önce";
     }
 
+    /// <summary>Cursor hesabından okunan değer için: "Cursor · 2dk önce".</summary>
+    public static string LiveFreshness(DateTimeOffset fetched, DateTimeOffset now) => $"Cursor · {Format.Duration(now - fetched)} önce";
+
     /// <summary>
     /// "agent about --format json" çıktısından (Cursor CLI'nin belgelenmiş komutu) yalnızca plan adını okur.
     /// E-posta gibi diğer alanlar okunmaz ve saklanmaz.
