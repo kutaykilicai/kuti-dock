@@ -229,6 +229,21 @@ public class FullscreenRuleTests
     }
 }
 
+public class CursorShapeTests
+{
+    [Fact]
+    public void ShapeHasNamesAndTypesButNoValues()
+    {
+        var json = """{"accessToken":"eyJsecret","usagePercent":46.5,"isEnabled":true,"plan":{"used":120,"items":[{"email":"k@x.com"}]},"x":null}""";
+        var shape = CursorApi.Shape(json);
+        Assert.Equal("{accessToken:str,usagePercent:num,isEnabled:bool,plan:{used:num,items:[{email:str}]},x:null}", shape);
+        Assert.DoesNotContain("secret", shape);
+        Assert.DoesNotContain("k@x.com", shape);
+        Assert.DoesNotContain("46", shape);
+        Assert.Equal("json değil", CursorApi.Shape("Not found"));
+    }
+}
+
 public class ThumbTests
 {
     [Fact]

@@ -103,6 +103,26 @@ public static class CursorApi
         catch (JsonException) { return null; }
     }
 
+    /// <summary>
+    /// Yanıtın YAPISI: alan adları ve tipleri (ör. "{a:num,b:{c:str}}"), hiçbir değer içermez. Teşhis günlüğü için.
+    /// </summary>
+    public static string Shape(string json)
+    {
+        try { using var d = JsonDocument.Parse(json); return Shape(d.RootElement, 0); }
+        catch (JsonException) { return "json değil"; }
+    }
+
+    static string Shape(JsonElement e, int depth) => e.ValueKind switch
+    {
+        JsonValueKind.Object when depth >= 5 => "{…}",
+        JsonValueKind.Object => "{" + string.Join(",", e.EnumerateObject().Take(40).Select(p => p.Name + ":" + Shape(p.Value, depth + 1))) + "}",
+        JsonValueKind.Array => e.GetArrayLength() == 0 ? "[]" : "[" + Shape(e[0], depth + 1) + "]",
+        JsonValueKind.String => "str",
+        JsonValueKind.Number => "num",
+        JsonValueKind.True or JsonValueKind.False => "bool",
+        _ => "null",
+    };
+
     /// <summary>Adıyla ilk eşleşen alanı (genişlik öncelikli, her derinlikte) bulur.</summary>
     static JsonElement? Find(JsonElement root, string name)
     {

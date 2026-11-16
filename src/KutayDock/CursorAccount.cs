@@ -14,13 +14,14 @@ namespace KutayDock
     /// <summary>
     /// Kutay Dock'un KENDİ Cursor girişi. Belirteç yalnızca bu akıştan alınır (Cursor / Grok Bot uygulamalarının
     /// belirteçlerine, çerezlerine ya da yerel veritabanına dokunulmaz), DPAPI (CurrentUser) ile şifreli saklanır
-    /// ve hiçbir yere (hata.log dahil) yazılmaz. Uç noktalar Cursor'un BELGELENMEMİŞ dahili API'leridir.
+    /// ve hiçbir yere yazılmaz. hata.log'a yalnızca adım, HTTP kodu, hata türü ve yanıttaki ALAN ADLARI yazılır
+    /// (URL, belirteç, çerez ya da değer asla). Uç noktalar Cursor'un BELGELENMEMİŞ dahili API'leridir.
     /// </summary>
     internal sealed class CursorAccount
     {
         static readonly string TokenFile = Path.Combine(Services.DataDir, "cursor-oturum.bin");
         static readonly byte[] Entropy = Encoding.UTF8.GetBytes("KutayDock.CursorOturum.v1");
-        static readonly HttpClient Http = new(new HttpClientHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(20) };
+        static readonly HttpClient Http = new(new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) };
 
         string _token;
         CancellationTokenSource _login;
@@ -51,29 +52,44 @@ namespace KutayDock
         public async Task<string> LoginAsync()
         {
             if (_login != null) return "Giriş zaten bekliyor; tarayıcıda onayla.";
-            var cts = _login = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            var cts = _login = new CancellationTokenSource(TimeSpan.FromMinutes(15));
             Changed?.Invoke();
             try
             {
                 var verifier = CursorApi.NewVerifier();
                 var uuid = Guid.NewGuid();
                 Process.Start(new ProcessStartInfo(CursorApi.LoginUrl(CursorApi.Challenge(verifier), uuid)) { UseShellExecute = true });
+                int errors = 0;
                 while (!cts.IsCancellationRequested)
                 {
                     await Task.Delay(2000, cts.Token);
-                    using var res = await Http.GetAsync(CursorApi.PollUrl(uuid, verifier), cts.Token);
-                    if (res.StatusCode == HttpStatusCode.NotFound) continue; // henüz onaylanmadı
-                    if (!res.IsSuccessStatusCode) continue;
-                    var token = CursorApi.ParsePoll(await res.Content.ReadAsStringAsync(cts.Token));
-                    if (token == null) continue;
+                    string json;
+                    try
+                    {
+                        using var res = await Http.GetAsync(CursorApi.PollUrl(uuid, verifier), cts.Token);
+                        if (res.StatusCode == HttpStatusCode.NotFound) { errors = 0; continue; } // henüz onaylanmadı
+                        if (res.StatusCode == HttpStatusCode.Forbidden) { Trace("giriş: poll 403 (Cursor girişi reddetti)"); return "Cursor girişi reddetti (hesap/ekip politikası)."; }
+                        if (!res.IsSuccessStatusCode) { Trace($"giriş: poll HTTP {(int)res.StatusCode}"); if (++errors >= 3) return $"Giriş başarısız (HTTP {(int)res.StatusCode}). Tekrar dene."; continue; }
+                        json = await res.Content.ReadAsStringAsync(cts.Token);
+                    }
+                    catch (Exception e) when (!cts.IsCancellationRequested && e is HttpRequestException or TaskCanceledException)
+                    {
+                        // Tek bir ağ hatası/zaman aşımı girişi bitirmesin; art arda 3 hatada dur.
+                        Trace($"giriş: poll ağ hatası {e.GetType().Name}");
+                        if (++errors >= 3) return "Giriş başarısız (ağ hatası). Tekrar dene.";
+                        continue;
+                    }
+                    var token = CursorApi.ParsePoll(json);
+                    if (token == null) { Trace($"giriş: poll 200 ama belirteç yok; alanlar: {CursorApi.Shape(json)}"); continue; }
                     Save(token);
+                    Trace("giriş: belirteç alındı ve DPAPI ile kaydedildi");
                     _ = RefreshSand(force: true);
                     return "Giriş tamam.";
                 }
-                return "Giriş zaman aşımına uğradı (5 dk). Tekrar dene.";
+                return "Giriş zaman aşımına uğradı (15 dk). Tekrar dene.";
             }
             catch (OperationCanceledException) { return "Giriş iptal edildi ya da zaman aşımına uğradı."; }
-            catch (Exception) { return "Giriş başarısız (ağ hatası). Tekrar dene."; }
+            catch (Exception e) { Trace($"giriş: hata {e.GetType().Name}"); return "Giriş başarısız. Tekrar dene."; }
             finally { _login = null; Changed?.Invoke(); }
         }
 
@@ -103,7 +119,7 @@ namespace KutayDock
             if (!force && DateTimeOffset.Now - _sandTried < TimeSpan.FromMinutes(5)) return;
             _sandTried = DateTimeOffset.Now; // hata olsa da 5 dk bekle
             var json = await Request(CursorApi.SandUrl, post: true);
-            if (json != null && CursorApi.ParseSand(json) is { } s) { Sand = s; SandAt = DateTimeOffset.Now; }
+            if (json != null && CursorApi.ParseSand(json) is { } s) { Sand = s; SandAt = DateTimeOffset.Now; Trace($"sand: enabled={s.Enabled} yüzde={(s.Percent.HasValue ? "var" : "yok")} sıfırlanma={(s.ResetsAt.HasValue ? "var" : "yok")}"); }
             Changed?.Invoke();
         }
 
@@ -116,6 +132,13 @@ namespace KutayDock
             var json = await Request(CursorApi.SummaryUrl, post: false);
             if (json != null && CursorApi.ParseSummary(json) is { } s) Summary = s;
             Changed?.Invoke();
+        }
+
+        /// <summary>hata.log'a teşhis satırı. Asla URL, belirteç, çerez ya da yanıt değeri verilmez.</summary>
+        static void Trace(string line)
+        {
+            try { File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Cursor {line}\n"); }
+            catch (Exception) { }
         }
 
         /// <summary>İstek; her hata sessizce null döner (ayrıntı hiçbir yere yazılmaz).</summary>
@@ -134,13 +157,19 @@ namespace KutayDock
                     req.Headers.TryAddWithoutValidation("Referer", CursorApi.Origin + "/dashboard");
                     if (method == HttpMethod.Post) req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
                     using var res = await Http.SendAsync(req);
-                    if (res.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) { NeedsRelogin = true; return null; }
+                    var name = url == CursorApi.SandUrl ? "sand" : "summary";
+                    int code = (int)res.StatusCode;
+                    // Oturum geçersizse cursor.com 401/403 yerine giriş sayfasına (3xx) yönlendirir.
+                    if (res.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden || code is >= 300 and < 400)
+                    { Trace($"{name}: {method} HTTP {code} → yeniden giriş gerekli"); NeedsRelogin = true; return null; }
                     if (res.StatusCode == HttpStatusCode.MethodNotAllowed) continue; // POST kabul edilmezse GET dene
-                    return res.IsSuccessStatusCode ? await res.Content.ReadAsStringAsync() : null;
+                    var body = res.IsSuccessStatusCode ? await res.Content.ReadAsStringAsync() : null;
+                    Trace($"{name}: {method} HTTP {code}" + (body != null ? $"; alanlar: {CursorApi.Shape(body)}" : ""));
+                    return body;
                 }
                 return null;
             }
-            catch (Exception) { return null; }
+            catch (Exception e) { Trace($"istek hatası {e.GetType().Name}"); return null; }
             finally { Interlocked.Exchange(ref _busy, 0); }
         }
     }

@@ -1,4 +1,4 @@
-KUTAY DOCK 1.3.1  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.3.2  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,14 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.3.2'DE NE DEĞİŞTİ
+  + Düzeltme: "Cursor ile giriş yap" sonrası belirteç kaydedilmiyordu. Tek bir
+    ağ hatası/zaman aşımı girişi bitiriyordu; artık art arda 3 hatada durur,
+    bekleme 15 dk. Oturum geçersizse cursor.com'un giriş sayfasına yönlendirmesi
+    "yeniden giriş" olarak algılanır.
+  + Teşhis: hata.log'a "Cursor ..." satırları yazılır: adım, HTTP kodu ve
+    yanıttaki alan adları. Belirteç, çerez, URL ya da değer yazılmaz.
 
 1.3.1'DE NE DEĞİŞTİ
   + Düzeltme: dock bazen kayboluyordu. "Tam ekranda gizle" yalnızca DOCK'UN
