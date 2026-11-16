@@ -82,6 +82,13 @@ namespace KutiDock
                     });
                 KutiDock.Mac.UI.DockWindow.WindowPreviewDismissed = WindowPreview.CloseCurrent;
                 KutiDock.Mac.UI.DockWindow.KutiSettingsRequested = OpenSettings;
+                // Birleşik alt şerit: Mac dock widget şeritlerine yer bırakır ve onları kendi monitöründe yerleştirir
+                KutiDock.Mac.UI.DockWindow.SideRequest = scale => (_dock?.NaturalPx(scale) ?? 0, _dockRight?.NaturalPx(scale) ?? 0);
+                KutiDock.Mac.UI.DockWindow.SidesPlaced = (bounds, l, r, mid, bottom, scale) =>
+                {
+                    _dock?.PlaceAt(bounds.Left, bounds.Right, l, mid, bottom, scale);
+                    _dockRight?.PlaceAt(bounds.Left, bounds.Right, r, mid, bottom, scale);
+                };
                 var backdrop = new KutiDock.Mac.UI.BackdropWindow();
                 backdrop.Show();
                 _mac = new KutiDock.Mac.UI.DockWindow(_macConfig, backdrop);
@@ -101,13 +108,16 @@ namespace KutiDock
             if (_mac == null) { _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify); _dock.Show(); return; }
             bool menuBar = _macConfig.Settings.MenuBar;
             bool Keep(string id) => id != "apps" && !(menuBar && id == "tray");
-            if (s.Edge == DockEdge.Alt)
+            if (s.Edge == DockEdge.Alt && _macConfig.Settings.Edge == KutiDock.Mac.Core.DockEdge.Bottom)
             {
                 int split = s.Widgets.IndexOf("apps");
                 var left = split < 0 ? new List<string>() : s.Widgets.Take(split).Where(Keep).ToList();
                 var right = (split < 0 ? s.Widgets : s.Widgets.Skip(split + 1)).Where(Keep).ToList();
                 if (left.Count > 0) { _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify, left, StripAnchor.SolAlt); _dock.Show(); }
                 if (right.Count > 0) { _dockRight = new DockWindow(_services, OpenSettings, ExitApp, Notify, right, StripAnchor.SagAlt); _dockRight.Show(); }
+                foreach (var d in new[] { _dock, _dockRight }) if (d != null) d.NaturalChanged = () => _mac?.RequestPlace();
+                // Şeritler ölçüldükten sonra Mac dock yerleşimi (ve şeritlerin yeri) tazelenir
+                Dispatcher.BeginInvoke(new Action(() => _mac?.RequestPlace()), System.Windows.Threading.DispatcherPriority.Loaded);
             }
             else
             {

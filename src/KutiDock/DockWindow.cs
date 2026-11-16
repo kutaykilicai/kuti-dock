@@ -37,6 +37,12 @@ namespace KutiDock
         readonly List<string> _only;     // null: ayardaki tüm widget'lar
         readonly StripAnchor _anchor;
         static DockWindow _alertOwner;   // birden çok şerit varken uyarılar tek kez
+        // Mac dock birleşik şeridi: şerit gerekirse daralır (asla Mac dock'un üstüne binmez), yeri Mac dock'tan gelir (piksel)
+        Viewbox _fit;
+        double _edgeX, _midY, _bottomY, _placeScale; bool _placed;
+        double _lastNatural;
+        /// <summary>Doğal genişlik belirgin değişince (Mac dock yerleşimi tazelensin).</summary>
+        public Action NaturalChanged;
 
         public DockWindow(Services s, Action openSettings, Action exit, Action<string, string> notify, List<string> only, StripAnchor anchor)
             : this(s, openSettings, exit, notify, only, anchor, true) { }
@@ -136,7 +142,12 @@ namespace KutiDock
                 _body = Body(dock, k, false);
             }
             else _body = Body(_row, k, false);
-            Content = _body;
+            if (_anchor != StripAnchor.Kenar)
+            {
+                _fit = new Viewbox { Child = _body, StretchDirection = StretchDirection.DownOnly };
+                Content = _fit;
+            }
+            else Content = _body;
             ApplyBlur();
             Refresh();
             Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
@@ -164,10 +175,44 @@ namespace KutiDock
             Native.SetBlur(_hwnd, _theme.Blur);
         }
 
+        /// <summary>Daraltılmamış genişlik, verilen monitör ölçeğinde piksel (kenar boşluğu dahil).</summary>
+        public double NaturalPx(double scale)
+        {
+            if (_body == null) return 0;
+            _body.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _lastNatural = _body.DesiredSize.Width;
+            return _lastNatural <= 0 ? 0 : (_lastNatural + 8) * scale;
+        }
+
+        /// <summary>Mac dock'un verdiği yere yerleşir: monitör kenarı, izin verilen genişlik, plaka ortası ve şerit altı (piksel).</summary>
+        public void PlaceAt(int screenLeft, int screenRight, double allowedPx, double midY, double bottomY, double scale)
+        {
+            if (_fit == null) return;
+            _placeScale = scale;
+            _edgeX = _anchor == StripAnchor.SolAlt ? screenLeft + 8 * scale : screenRight - 8 * scale;
+            _midY = midY; _bottomY = bottomY; _placed = true;
+            double dip = (allowedPx - 8 * scale) / scale;
+            _fit.Visibility = dip < 24 ? Visibility.Collapsed : Visibility.Visible;
+            _fit.MaxWidth = Math.Max(24, dip);
+            Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
+        }
+
         /// <summary>Dock'u ekranın alt (ya da üst) ortasına yerleştirir, gerekirse ekranda yer ayırır.</summary>
         void Place()
         {
             if (_hwnd == IntPtr.Zero || _body == null) return;
+            if (_anchor != StripAnchor.Kenar && _placed)
+            {
+                var d = VisualTreeHelper.GetDpi(this);
+                double wpx = ActualWidth * d.DpiScaleX, hpx = ActualHeight * d.DpiScaleY;
+                double x = _anchor == StripAnchor.SolAlt ? _edgeX : _edgeX - wpx;
+                double y = Math.Min(_midY - hpx / 2, _bottomY - hpx - 2 * _placeScale);
+                Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)Math.Round(x), (int)Math.Round(y), 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+                double f = _lastNatural > 0 ? Math.Min(1, ActualWidth / _lastNatural) : 1; // daralınca köşe yarıçapı da küçülür
+                int rr = (int)Math.Round(32 * _s.Settings.Scale * f * d.DpiScaleX);
+                Native.SetWindowRgn(_hwnd, Native.CreateRoundRectRgn(0, 0, (int)Math.Round(wpx) + 1, (int)Math.Round(hpx) + 1, rr, rr), true);
+                return;
+            }
             var set = _s.Settings; double k = set.Scale, margin = 8;
             double w = ActualWidth, h = ActualHeight;
             var dpi = VisualTreeHelper.GetDpi(this);
@@ -206,6 +251,12 @@ namespace KutiDock
             if (!IsVisible) return;
             _s.Tick();
             Refresh();
+            if (_fit != null && NaturalChanged != null)
+            {
+                double before = _lastNatural;
+                NaturalPx(1);
+                if (Math.Abs(_lastNatural - before) > 12) NaturalChanged();
+            }
             RunAlerts();
         }
 

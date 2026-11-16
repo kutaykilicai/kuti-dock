@@ -56,6 +56,31 @@ internal sealed class DockWindow : Window
     /// <summary>Kuti Dock: dock menüsündeki "Widget ve Kuti ayarları…".</summary>
     public static Action? KutiSettingsRequested;
 
+    /// <summary>
+    /// Kuti Dock birleşik şeridi (yalnızca altta): monitör ölçeği verilince sol ve sağ widget şeritlerinin istediği genişlik (piksel).
+    /// Mac dock penceresi bu yanlar ve boşluk kadar daralır, böylece simgeler widget'ların altına girmez.
+    /// </summary>
+    public static Func<double, (double Left, double Right)>? SideRequest;
+    /// <summary>Yerleşimden sonra: monitör sınırları, izin verilen sol/sağ genişlik, plakanın orta Y'si ve şerit altı (piksel), ölçek.</summary>
+    public static Action<RECT, double, double, double, double, double>? SidesPlaced;
+    const double SideGapDip = 12;
+    double _lastNeed;
+
+    /// <summary>Widget şeritlerinin boyu değişince yerleşimi tazeler.</summary>
+    public void RequestPlace() => SchedulePlace();
+
+    /// <summary>Mac dock'un alt şeritte ihtiyaç duyduğu uzunluk (DIP): dinlenme plakası + ortadaki büyütme dalgası.</summary>
+    double NeedDip()
+    {
+        var slots = _entries.Select(i => new DockSlot(i.Kind == DockItemKind.App, i.TargetPresence > 0 ? 1 : 0)).ToList();
+        var probe = new DockLayout();
+        probe.Compute(_m, slots, 100_000, null, 0);
+        double rest = probe.RestPlateEnd - probe.RestPlateStart;
+        if (!_config.Settings.Magnification || slots.Count == 0) return rest + 8;
+        probe.Compute(_m, slots, 100_000, 50_000, 1); // imleç dock'un ortasında: en geniş hâl
+        return Math.Max(rest, probe.PlateEnd - probe.PlateStart) + 8;
+    }
+
     /// <summary>Kuti Dock ayarlarından Mac dock ayarlarını açmak için.</summary>
     public void OpenSettings() => ShowSettings();
     readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
@@ -385,6 +410,18 @@ internal sealed class DockWindow : Window
             DockEdge.Right => new RECT(bar.Right - thick, work.Top, bar.Right, work.Bottom),
             _ => new RECT(display.Bounds.Left, bar.Bottom - thick, display.Bounds.Right, bar.Bottom),
         };
+        if (Edge == DockEdge.Bottom && SideRequest is { } request)
+        {
+            // Kuti birleşik şeridi: sol widget'lar | Mac dock | sağ widget'lar, aralarında boşluk; asla üst üste binmez
+            _lastNeed = NeedDip();
+            var (wantL, wantR) = request(_scale);
+            double gap = SideGapDip * _scale;
+            var (l, r) = StripFit.Sides(display.Bounds.Width, _lastNeed * _scale, wantL, wantR, gap);
+            var (a, b) = StripFit.DockRange(display.Bounds.Left, display.Bounds.Right, l, r, gap);
+            _windowPx = new RECT((int)Math.Ceiling(a), _windowPx.Top, (int)Math.Floor(b), _windowPx.Bottom);
+            double plateMid = bar.Bottom - (_m.EdgeGap + _m.PlateThickness / 2) * _scale;
+            SidesPlaced?.Invoke(display.Bounds, l, r, plateMid, bar.Bottom, _scale);
+        }
         // Moving an app bar notifies the others (the menu bar), which move and notify back.
         if (!GetWindowRect(_hwnd, out var current) || !current.Equals(_windowPx))
             SetWindowPos(_hwnd, HWND_TOPMOST, _windowPx.Left, _windowPx.Top, _windowPx.Width, _windowPx.Height, SWP_NOACTIVATE);
@@ -633,6 +670,8 @@ internal sealed class DockWindow : Window
             _views.Add(item, view);
         }
         if (_pressed is not null && !_entries.Contains(_pressed)) _pressed = null;
+        // Kuti: simge sayısı değişince birleşik şeritteki pay da değişir
+        if (SideRequest is not null && _hwnd != IntPtr.Zero && Math.Abs(NeedDip() - _lastNeed) > 1) SchedulePlace();
     }
 
     // ───────────────────────── Frame ─────────────────────────

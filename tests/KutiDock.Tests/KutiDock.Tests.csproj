@@ -15,6 +15,7 @@
     <Compile Include="..\..\src\KutiDock.Mac\Core\DockLayout.cs" Link="Mac\DockLayout.cs" />
     <Compile Include="..\..\src\KutiDock.Mac\Core\Bouncer.cs" Link="Mac\Bouncer.cs" />
     <Compile Include="..\..\src\KutiDock.Mac\Core\Loc.cs" Link="Mac\Loc.cs" />
+    <Compile Include="..\..\src\KutiDock.Mac\Core\StripFit.cs" Link="Mac\StripFit.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\KutiDock.Core\KutiDock.Core.csproj" />

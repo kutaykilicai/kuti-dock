@@ -7,6 +7,12 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.1'DE NE DEĞİŞTİ
+- Mac dock ile widget'lar artık üst üste binmez: alt kenarda tek birleşik şerit. Solda Başlat ve Ara,
+  ortada Mac dock uygulama simgeleri, sağda widget'lar; aralarında boşluk. Ekran yetmezse widget'lar
+  orantılı daralır (Mac dock'a büyütme dahil gereken yer önce ayrılır). Şeritler Mac dock hangi
+  monitördeyse oraya ve o monitörün ölçeğine (DPI) göre yerleşir. Klasik mod değişmedi.
+
 1.6'DA NE DEĞİŞTİ (yeni adı: Kuti Dock)
   + Gerçek Mac dock: Gravitone'un (MIT, Stefano Lupano) kaynak kodu doğrudan
     alındı. Dalga gibi büyütme (imlecin altındaki simge yerinde kalır),
