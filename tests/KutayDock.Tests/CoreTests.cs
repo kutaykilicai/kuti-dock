@@ -276,7 +276,8 @@ public class FloatingDefaultsTests
     public void NewSettingsFloat()
     {
         var s = new Settings().Migrate();
-        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(3, s.Version);
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(4, s.Version);
+        Assert.Equal(1, s.Widgets.IndexOf("search"));
     }
 
     [Fact]
@@ -285,7 +286,8 @@ public class FloatingDefaultsTests
         var s = new Settings { ReserveSpace = true, FullWidth = true, Version = 2 };
         var w = s.Widgets.ToList();
         s.Migrate();
-        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(w, s.Widgets);
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth);
+        Assert.Equal(w, s.Widgets);
         s.ReserveSpace = true; s.Migrate();          // kullanıcı sonradan açarsa kalıcı
         Assert.True(s.ReserveSpace);
     }
@@ -371,6 +373,65 @@ public class DockLayoutTests
     }
 }
 
+public class EverythingIpcTests
+{
+    [Fact]
+    public void SearchAddedOnceAndRemovalKept()
+    {
+        var s = new Settings { Version = 3, Widgets = new() { "start", "apps", "clock" } };
+        s.Migrate();
+        Assert.Equal(new[] { "start", "search", "apps", "clock" }, s.Widgets);
+        s.Widgets.Remove("search"); s.Migrate();   // kullanıcı kapatırsa geri gelmez
+        Assert.DoesNotContain("search", s.Widgets);
+    }
+
+    [Fact]
+    public void QueryLayout()
+    {
+        var b = EverythingIpc.BuildQuery(0x1234, 7, "ab", 20);
+        Assert.Equal(20 + 6, b.Length);
+        Assert.Equal(0x1234u, BitConverter.ToUInt32(b, 0));
+        Assert.Equal(7u, BitConverter.ToUInt32(b, 4));
+        Assert.Equal(20u, BitConverter.ToUInt32(b, 16));
+        Assert.Equal("ab\0", System.Text.Encoding.Unicode.GetString(b, 20, 6));
+    }
+
+    // Everything'in döndüreceği EVERYTHING_IPC_LISTW yanıtını taklit eder
+    static byte[] List(params (int flags, string name, string path)[] items)
+    {
+        var strings = new List<byte>();
+        int baseOff = 28 + items.Length * 12;
+        var head = new List<byte>();
+        foreach (var v in new uint[] { 1, 1, 2, 1, 1, (uint)items.Length, 0 }) head.AddRange(BitConverter.GetBytes(v));
+        foreach (var (f, n, p) in items)
+        {
+            uint no = (uint)(baseOff + strings.Count); strings.AddRange(System.Text.Encoding.Unicode.GetBytes(n + "\0"));
+            uint po = (uint)(baseOff + strings.Count); strings.AddRange(System.Text.Encoding.Unicode.GetBytes(p + "\0"));
+            head.AddRange(BitConverter.GetBytes((uint)f)); head.AddRange(BitConverter.GetBytes(no)); head.AddRange(BitConverter.GetBytes(po));
+        }
+        head.AddRange(strings);
+        return head.ToArray();
+    }
+
+    [Fact]
+    public void ParsesFilesAndFolders()
+    {
+        var hits = EverythingIpc.ParseList(List((0, "rapor.xlsx", @"C:\Users\Kutay\Desktop"), (1, "Ai projeler", @"C:\Users\Kutay\Desktop")));
+        Assert.Equal(2, hits.Count);
+        Assert.Equal(@"C:\Users\Kutay\Desktop\rapor.xlsx", hits[0].FullPath);
+        Assert.False(hits[0].IsFolder);
+        Assert.True(hits[1].IsFolder);
+    }
+
+    [Fact]
+    public void BrokenDataIsEmpty()
+    {
+        Assert.Empty(EverythingIpc.ParseList(new byte[5]));
+        var bad = List((0, "x", "y")); BitConverter.GetBytes(9999u).CopyTo(bad, 32); // ad ofseti dışarıda
+        Assert.Empty(EverythingIpc.ParseList(bad));
+    }
+}
+
 public class ThumbTests
 {
     [Fact]
@@ -433,8 +494,8 @@ public class MigrationTests
         File.WriteAllText(p, "{\"Style\":\"Siyah\",\"AiSource\":\"ClaudeCode\",\"IcsUrls\":[\"x\"],\"Widgets\":[\"start\",\"apps\",\"ai\",\"media\",\"volume\",\"screentime\",\"calendar\",\"battery\",\"clock\"]}");
         var s = Settings.Load(p);
         Assert.Equal(DockStyle.Siyah, s.Style);
-        Assert.Equal(new[] { "start", "apps", "ai", "volume", "storage", "screenshot", "battery", "clock" }, s.Widgets);
-        Assert.Equal(3, s.Version);
+        Assert.Equal(new[] { "start", "search", "apps", "ai", "volume", "storage", "screenshot", "battery", "clock" }, s.Widgets);
+        Assert.Equal(4, s.Version);
         // 1.1 dosyası tekrar taşınmaz: kullanıcı Depolama'yı kapattıysa geri gelmez
         s.Widgets.Remove("storage"); s.Save(p);
         Assert.DoesNotContain("storage", Settings.Load(p).Widgets);

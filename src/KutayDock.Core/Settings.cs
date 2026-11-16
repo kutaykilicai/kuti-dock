@@ -30,7 +30,7 @@ public sealed class Settings
 
     public List<string> Widgets { get; set; } = new()
     {
-        "start", "apps", "ai", "volume", "system", "network", "storage", "screenshot", "battery", "tray", "clock"
+        "start", "search", "apps", "ai", "volume", "system", "network", "storage", "screenshot", "battery", "tray", "clock"
     };
 
     /// <summary>Ayar dosyası sürümü (1.0'da alan yoktu = 0). 2 = Kutay Dock 1.1. Load() her zaman Migrate() çağırır.</summary>
@@ -87,6 +87,12 @@ public sealed class Settings
             ReserveSpace = false;
             FullWidth = false;
             Version = 3;
+        }
+        if (Version < 4)
+        {
+            // 1.4.1: Everything araması Başlat'ın hemen sonrasına
+            if (!Widgets.Contains("search")) Widgets.Insert(Widgets.IndexOf("start") + 1, "search");
+            Version = 4;
         }
         return this;
     }

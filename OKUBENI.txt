@@ -1,4 +1,4 @@
-KUTAY DOCK 1.4  ·  Windows 10/11 için akıllı dock  ·  MIT
+KUTAY DOCK 1.4.1  ·  Windows 10/11 için akıllı dock  ·  MIT
 ==========================================================
 
 Ne bu?
@@ -6,6 +6,14 @@ Ne bu?
   Uygulamaların ve canlı widget'lar tek şeritte. lumabar.xyz'deki dock'un
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
+
+1.4.1'DE NE DEĞİŞTİ
+  + Arama (büyüteç): kurulu Everything ile arka planda dosya/klasör arama.
+    Yazdıkça ilk 20 sonuç simge + ad + klasörle dock'un yanındaki küçük
+    panelde listelenir. Enter/tık aç, Ctrl+Enter klasörde göster, ↑↓ seç,
+    Esc kapat. Everything'in belgelenmiş IPC'si kullanılır (DLL gerekmez);
+    Kutay Dock Everything'i başlatmaz, penceresini açmaz, ayarlarına dokunmaz.
+    Everything kapalıysa panel "Everything çalışmıyor" der.
 
 1.4'TE NE DEĞİŞTİ
   + Videoda dock görünmez: Chrome/YouTube/dizi siteleri ve oynatıcıların tam

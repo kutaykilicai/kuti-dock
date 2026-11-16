@@ -86,6 +86,7 @@ namespace KutayDock
                 Tile t = id switch
                 {
                     "start" => new StartTile(_s, _theme),
+                    "search" => new SearchTile(_s, _theme),
                     "apps" => new AppsTile(_s, _theme, () => _hwnd),
                     "ai" => new LimitsTile(_s, _theme, _openSettings),
                     "volume" => new VolumeTile(_s, _theme),

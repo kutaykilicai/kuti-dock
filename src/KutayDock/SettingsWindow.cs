@@ -20,7 +20,7 @@ namespace KutayDock
 
         static readonly (string id, string name)[] AllWidgets =
         {
-            ("start", "Başlat düğmesi"), ("apps", "Uygulamalar (sabitlenenler + açık pencereler)"), ("ai", "Limitler (Grok Bot; tıklayınca Cursor)"),
+            ("start", "Başlat düğmesi"), ("search", "Ara (Everything)"), ("apps", "Uygulamalar (sabitlenenler + açık pencereler)"), ("ai", "Limitler (Grok Bot; tıklayınca Cursor)"),
             ("volume", "Ses"), ("system", "Sistem (CPU / RAM / GPU)"), ("network", "Ağ hızı"),
             ("storage", "Depolama (disk boş alanı)"), ("screenshot", "Ekran görüntüsü (ShareX)"), ("battery", "Pil (yalnızca dizüstü)"), ("tray", "Gizli tepsi simgeleri (^)"), ("clock", "Saat, tarih ve hava durumu"),
         };
@@ -135,7 +135,7 @@ namespace KutayDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.4 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kutay Dock 1.4.1 · MIT · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutayDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }
