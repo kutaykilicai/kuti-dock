@@ -24,7 +24,8 @@ namespace KutiDock.Tiles
         string _signature = "";
 
         // macOS büyütmesi ve açılış sıçraması (Gravitone'dan uyarlandı, MIT; bkz. Core/Motion.cs)
-        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public string Key; public double Cur = 1; }
+        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public Image Img; public string Key; public double Cur = 1; }
+        ZoomLayer _zoom;   // büyüyen simgeler dock'un üstünde buraya çizilir (kesilmez, şerit zıplamaz)
         readonly List<Slot> _slots = new();
         readonly Dictionary<string, Bouncer> _bounce = new();
         readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -62,10 +63,12 @@ namespace KutiDock.Tiles
             double now = _clock.Elapsed.TotalSeconds, dt = Math.Clamp(now - _last, 0, 0.1); _last = now;
             bool vertical = DockLayout.Vertical(S.Settings.Edge);
             var edge = S.Settings.Edge;
-            double icon = 28 * K, max = 40 * K;
+            double icon = Magnify.ClassicIcon * K, max = Magnify.ClassicMax * K;
             bool over = IsMouseOver && S.Settings.Magnification;
             var m = Mouse.GetPosition(_panel);
             bool busy = over;
+            var (ox, oy) = DockLayout.ZoomOrigin(edge);
+            var draw = new List<ZoomLayer.Item>();
             foreach (var sl in _slots)
             {
                 if (!sl.Outer.IsLoaded) continue;
@@ -76,14 +79,30 @@ namespace KutiDock.Tiles
                     target = Magnify.Scale(vertical ? m.Y - c.Y : m.X - c.X, icon, max, 1);
                 }
                 sl.Cur = Magnify.Approach(sl.Cur, target, dt, target > sl.Cur ? Magnify.TauGrow : Magnify.TauShrink);
-                sl.Scale.ScaleX = sl.Scale.ScaleY = sl.Cur;
                 if (sl.Cur != 1) busy = true;
                 double lift = 0;
-                if (_bounce.TryGetValue(sl.Key, out var b) && b.IsActive) { lift = b.Offset(now) * 18 * K; busy = true; } // dock içine sığacak kadar
-                sl.Lift.X = edge == DockEdge.Sol ? lift : edge == DockEdge.Sag ? -lift : 0;
-                sl.Lift.Y = edge == DockEdge.Alt ? -lift : edge == DockEdge.Ust ? lift : 0;
+                if (_bounce.TryGetValue(sl.Key, out var b) && b.IsActive) { lift = b.Offset(now) * 18 * K; busy = true; }
+                double lx = edge == DockEdge.Sol ? lift : edge == DockEdge.Sag ? -lift : 0;
+                double ly = edge == DockEdge.Alt ? -lift : edge == DockEdge.Ust ? lift : 0;
+                draw.Add(new ZoomLayer.Item(sl.Img, sl.Img.Source, sl.Cur, lx, ly, ox, oy));
             }
-            if (!busy) Loop(false);
+            // Büyüyen ya da zıplayan simge varken hepsi katmanda çizilir; katman kullanılamazsa eski yol (dock içinde dönüşüm).
+            bool lifted = draw.Exists(d => d.Scale > 1.0005 || d.LiftX != 0 || d.LiftY != 0);
+            if (lifted && (_zoom ??= new ZoomLayer()).Draw(this, draw, 44 * K))
+            {
+                foreach (var sl in _slots) { sl.Img.Opacity = 0; sl.Scale.ScaleX = sl.Scale.ScaleY = 1; sl.Lift.X = sl.Lift.Y = 0; }
+            }
+            else
+            {
+                if (!lifted) _zoom?.Clear();
+                for (int i = 0; i < _slots.Count && i < draw.Count; i++)
+                {
+                    var sl = _slots[i]; sl.Img.Opacity = 1;
+                    sl.Scale.ScaleX = sl.Scale.ScaleY = lifted ? sl.Cur : 1;
+                    sl.Lift.X = lifted ? draw[i].LiftX : 0; sl.Lift.Y = lifted ? draw[i].LiftY : 0;
+                }
+            }
+            if (!busy) { _zoom?.Clear(); foreach (var sl in _slots) sl.Img.Opacity = 1; Loop(false); }
         }
 
         static string PinnedDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -146,7 +165,7 @@ namespace KutiDock.Tiles
             var sig = string.Join("|", items.Select(i => i.Key + ":" + i.Windows.Count + (i.Windows.Contains(fg) ? "*" : "")));
             if (sig == _signature) { UpdateHandles(items); return; }
             _signature = sig;
-            _panel.Children.Clear(); _slots.Clear();
+            _panel.Children.Clear(); _slots.Clear(); _zoom?.Clear();
             foreach (var it in items) _panel.Children.Add(MakeButton(it, it.Windows.Contains(fg)));
             if (_bounce.Values.Any(b => b.IsActive)) Loop(true);
         }
@@ -200,7 +219,7 @@ namespace KutiDock.Tiles
                     Margin = DockLayout.Vertical(edge) ? new Thickness(0, 2 * K, 0, 2 * K) : new Thickness(2 * K, 0, 2 * K, 0),
                 };
             }
-            _slots.Add(new Slot { Outer = outer, Scale = scale, Lift = lift, Key = item.Key });
+            _slots.Add(new Slot { Outer = outer, Scale = scale, Lift = lift, Img = img, Key = item.Key });
             // Windows 11 gibi: üzerinde biraz bekleyince açık pencerelerin canlı önizlemesi
             var hover = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
             hover.Tick += (_, _) => { hover.Stop(); if (btn.IsMouseOver) Preview((AppItem)outer.Tag, btn); };
@@ -218,9 +237,30 @@ namespace KutiDock.Tiles
             if (alive.Count > 1) { Preview(it, target); return; } // birden çok pencere: önizleme panelinden seç
             WindowPreview.CloseCurrent();
             var fg = Native.GetForegroundWindow();
-            if (alive[0] == fg) Native.ShowWindow(fg, Native.SW_MINIMIZE);
-            else Native.Activate(alive[0]);
+            // 1.6'daki Genie: öndeyse simgeye akarak küçülür, küçültülmüşse simgeden büyüyerek gelir; olmazsa normal yol
+            if (alive[0] == fg) { if (!Genie(alive[0], target, false)) Native.ShowWindow(fg, Native.SW_MINIMIZE); }
+            else if (!(Native.IsIconic(alive[0]) && Genie(alive[0], target, true))) Native.Activate(alive[0]);
             _signature = ""; // aktif göstergesini tazele
+        }
+
+        bool Genie(IntPtr hwnd, FrameworkElement target, bool restore)
+        {
+            if (!S.Settings.Animations) return false;
+            try
+            {
+                var edge = S.Settings.Edge switch
+                {
+                    DockEdge.Alt => KutiDock.Mac.Core.DockEdge.Bottom, DockEdge.Sol => KutiDock.Mac.Core.DockEdge.Left,
+                    DockEdge.Sag => KutiDock.Mac.Core.DockEdge.Right, _ => (KutiDock.Mac.Core.DockEdge?)null,
+                };
+                if (edge == null || !target.IsVisible) return false;
+                var a = target.PointToScreen(new Point(0, 0));
+                var b = target.PointToScreen(new Point(target.ActualWidth, target.ActualHeight));
+                var r = new KutiDock.Mac.Interop.RECT((int)Math.Min(a.X, b.X), (int)Math.Min(a.Y, b.Y), (int)Math.Max(a.X, b.X), (int)Math.Max(a.Y, b.Y));
+                return restore ? KutiDock.Mac.Core.ClassicGenie.Restore(hwnd, r, edge.Value, _self())
+                               : KutiDock.Mac.Core.ClassicGenie.Minimize(hwnd, r, edge.Value, _self());
+            }
+            catch (Exception) { return false; }
         }
 
         void Preview(AppItem it, FrameworkElement anchor)

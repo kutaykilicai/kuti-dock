@@ -80,4 +80,10 @@ public static class Magnify
     }
 
     public const double TauGrow = 0.045, TauShrink = 0.075, TauShowHide = 0.065;
+
+    /// <summary>
+    /// Klasik dock (1.6.2): simge 28, imlecin altında 44 (×1,57), simge aralığı en az 42 DIP (hepsi ölçekle çarpılır).
+    /// Yerleşim sabit kalır (şerit zıplamaz); bu oranla komşu büyümüş simgeler birbirinin üstüne taşmaz.
+    /// </summary>
+    public const double ClassicIcon = 28, ClassicMax = 44, ClassicPitch = 42;
 }

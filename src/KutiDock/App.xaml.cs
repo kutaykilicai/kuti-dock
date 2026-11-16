@@ -17,6 +17,8 @@ namespace KutiDock
         DockWindow _dock, _dockRight;           // Kuti widget şeridi (Mac dock açıkken altta sol ve sağ grup)
         KutiDock.Mac.UI.DockWindow _mac;         // Gravitone motoru: macOS dock + menü çubuğu
         KutiDock.Mac.Core.DockConfig _macConfig;
+        KutiDock.Mac.UI.MenuBars _classicBar;    // klasik modda da üstteki menü çubuğu (Mac dock açıkken onu Mac dock gösterir)
+        bool _barEvents;
         Forms.NotifyIcon _tray;
         SettingsWindow _settingsWindow;
         static string SettingsPath => Path.Combine(Services.DataDir, "ayarlar.json");
@@ -56,6 +58,7 @@ namespace KutiDock
             if (!File.Exists(SettingsPath)) { try { settings.Save(SettingsPath); } catch (Exception) { } }
             _services = new Services(settings);
             if (settings.MacDock) StartMac();
+            else StartClassicMenuBar();
             BuildStrips();
             if (_mac == null)
             {
@@ -105,7 +108,14 @@ namespace KutiDock
         {
             _dock?.Close(); _dockRight?.Close(); _dock = _dockRight = null;
             var s = _services.Settings;
-            if (_mac == null) { _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify); _dock.Show(); return; }
+            if (_mac == null)
+            {
+                // Klasik dock (1.5 düzeni). Menü çubuğu tepsiyi gösterdiği için "Gizli simgeler" widget'ı o varken çıkar.
+                var only = _classicBar != null ? s.Widgets.Where(id => id != "tray").ToList() : null;
+                _dock = only == null ? new DockWindow(_services, OpenSettings, ExitApp, Notify) : new DockWindow(_services, OpenSettings, ExitApp, Notify, only, StripAnchor.Kenar);
+                _dock.Show();
+                return;
+            }
             bool menuBar = _macConfig.Settings.MenuBar;
             bool Keep(string id) => id != "apps" && !(menuBar && id == "tray");
             if (s.Edge == DockEdge.Alt && _macConfig.Settings.Edge == KutiDock.Mac.Core.DockEdge.Bottom)
@@ -124,6 +134,39 @@ namespace KutiDock
                 _dock = new DockWindow(_services, OpenSettings, ExitApp, Notify, s.Widgets.Where(Keep).ToList(), StripAnchor.Kenar);
                 _dock.Show();
             }
+        }
+
+        /// <summary>Klasik modda menü çubuğu: Mac dock ayarlarındaki "Menü çubuğu" açıksa (varsayılan açık).</summary>
+        void StartClassicMenuBar()
+        {
+            if (_mac != null || _classicBar != null) return;
+            try
+            {
+                KutiDock.Mac.Core.Theme.Refresh();
+                _macConfig ??= KutiDock.Mac.Core.DockConfig.LoadOrCreate();
+                KutiDock.Mac.Core.Loc.Init(_macConfig.Settings.Language);
+                if (!_macConfig.Settings.MenuBar) return;
+                _classicBar = new KutiDock.Mac.UI.MenuBars(_ => null, _macConfig.Settings.MenuBarOnAllDisplays);
+                if (_barEvents) return;
+                _barEvents = true;
+                // Mac dock'un yaptığı gibi: ekran değişimi, uyku/kilit dönüşü, saat ve tema değişimi
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(new Action(() => _classicBar?.Sync()));
+                Microsoft.Win32.SystemEvents.PowerModeChanged += (_, ev) => { if (ev.Mode == Microsoft.Win32.PowerModes.Resume) Dispatcher.BeginInvoke(new Action(() => _classicBar?.Refresh())); };
+                Microsoft.Win32.SystemEvents.SessionSwitch += (_, ev) => Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (ev.Reason is Microsoft.Win32.SessionSwitchReason.SessionLock) _classicBar?.SetPaused(true);
+                    else if (ev.Reason is Microsoft.Win32.SessionSwitchReason.SessionUnlock or Microsoft.Win32.SessionSwitchReason.ConsoleConnect) { _classicBar?.SetPaused(false); _classicBar?.Refresh(); }
+                }));
+                Microsoft.Win32.SystemEvents.TimeChanged += (_, _) => Dispatcher.BeginInvoke(new Action(() => _classicBar?.UpdateClock()));
+                Microsoft.Win32.SystemEvents.UserPreferenceChanged += (_, _) => Dispatcher.BeginInvoke(new Action(() => { KutiDock.Mac.Core.Theme.Refresh(); _classicBar?.ApplyTheme(); }));
+            }
+            catch (Exception ex) { Log(ex); _classicBar = null; }
+        }
+
+        void StopClassicMenuBar()
+        {
+            try { _classicBar?.Dispose(); } catch (Exception ex) { Log(ex); }
+            _classicBar = null;
         }
 
         static void WaitForExplorer()
@@ -177,8 +220,8 @@ namespace KutiDock
             _services.InvalidateData();
             if (macChanged)
             {
-                if (s.MacDock) { TaskbarRemover.SetEnabled(false); AppBar.SetTaskbarAutoHide(false); StartMac(); }
-                else { StopMac(); hideChanged = true; }
+                if (s.MacDock) { TaskbarRemover.SetEnabled(false); AppBar.SetTaskbarAutoHide(false); StopClassicMenuBar(); StartMac(); }
+                else { StopMac(); hideChanged = true; StartClassicMenuBar(); }
             }
             if (hideChanged && _mac == null)
             {
@@ -206,6 +249,7 @@ namespace KutiDock
             AppBar.RestoreTaskbar();
             TaskbarRemover.SetEnabled(false);
             StopMac();
+            StopClassicMenuBar();
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
             _dock?.Close(); _dockRight?.Close();
             Shutdown();
@@ -214,6 +258,7 @@ namespace KutiDock
         protected override void OnExit(ExitEventArgs e)
         {
             try { _mac?.ReleaseShell(); } catch (Exception) { } // Mac dock menüsünden "Çık" da buraya gelir
+            StopClassicMenuBar(); // ayrılan üst şerit ve tepsi geri verilir
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); _tray = null; }
             AppBar.RestoreTaskbar();
             TaskbarRemover.SetEnabled(false);

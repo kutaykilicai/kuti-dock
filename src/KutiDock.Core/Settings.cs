@@ -33,8 +33,11 @@ public sealed class Settings
 
     /// <summary>Arama: Windows araması yerine Everything kullan.</summary>
     public bool SearchWithEverything { get; set; } = false;
-    /// <summary>1.6: macOS dock motoru (Gravitone): uygulamalar Mac dock'ta, menü çubuğu üstte; Kuti widget'ları yanında.</summary>
-    public bool MacDock { get; set; } = true;
+    /// <summary>
+    /// 1.6: ayrı macOS dock katmanı (Gravitone). 1.6.2'den beri varsayılan kapalı: klasik dock (Mac büyütmesi, sıçrama ve
+    /// Genie klasik şeritte) + üstte menü çubuğu.
+    /// </summary>
+    public bool MacDock { get; set; } = false;
     /// <summary>macOS büyütmesi (imleç çevresindeki simgeler büyür).</summary>
     public bool Magnification { get; set; } = true;
     /// <summary>Açılış sıçraması, dock/panel açılma-kapanma animasyonları.</summary>
@@ -122,6 +125,12 @@ public sealed class Settings
             // 1.6 (Kuti Dock): Mac dock motoru açık
             MacDock = true;
             Version = 6;
+        }
+        if (Version < 7)
+        {
+            // 1.6.2: eski klasik dock'a dönüş (Mac büyütmesi, sıçrama ve Genie onun simgelerinde); Mac dock katmanı kapalı
+            MacDock = false;
+            Version = 7;
         }
         return this;
     }

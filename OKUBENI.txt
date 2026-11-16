@@ -7,6 +7,16 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.2'DE NE DEĞİŞTİ
+- Eski (1.5) klasik dock geri geldi ve varsayılan: tek şerit; Başlat, Ara, uygulamalar, widget'lar.
+  Ayrı Mac dock katmanı varsayılan kapalı (Ayarlar > Mac dock'tan açılabilir); mevcut ayar klasiğe taşınır.
+- Klasik dock'ta uygulama simgeleri Mac dock gibi büyür: imlecin altındaki ×1,57, komşular kademeli
+  (Gravitone dalgası, yumuşak). Büyüyen simgeler dock'un üstündeki şeffaf katmanda çizilir: kesilmez,
+  şerit zıplamaz. Widget'lar büyümez.
+- Klasik dock'ta tıklayınca: açılışta sıçrama; öndeki pencere Genie ile simgeye küçülür, dock'tan
+  küçültülmüş pencere Genie ile geri gelir. Genie çalışamazsa normal küçültme/öne getirme.
+- Üstteki menü çubuğu klasik modda da açık (Mac dock ayarlarındaki "Menü çubuğu" ile kapatılır).
+
 1.6.1'DE NE DEĞİŞTİ
 - Mac dock ile widget'lar artık üst üste binmez: alt kenarda tek birleşik şerit. Solda Başlat ve Ara,
   ortada Mac dock uygulama simgeleri, sağda widget'lar; aralarında boşluk. Ekran yetmezse widget'lar

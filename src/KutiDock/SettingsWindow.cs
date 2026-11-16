@@ -81,8 +81,8 @@ namespace KutiDock
 
             // Mac dock (Gravitone motoru)
             var mac = Card(p, "Mac dock");
-            mac.Children.Add(Toggle("Mac dock (dalga büyütme, sıçrama, Genie, akrilik plaka, menü çubuğu, yığınlar, Geri Dönüşüm Kutusu)", _s.MacDock, v => _s.MacDock = v));
-            mac.Children.Add(new TextBlock { Text = "Açıkken uygulamalar Mac dock'ta durur, Başlat ve Ara solda, widget'lar sağda (tek şerit, asla üst üste binmez); Windows görev çubuğunu Mac dock yönetir. Menü çubuğu, Genie, büyütme, ekran ve görev çubuğu ayarları Mac dock ayarlarında (dock'a sağ tık).", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap, FontSize = 11, Margin = new Thickness(0, 2, 0, 6) });
+            mac.Children.Add(Toggle("Ayrı Mac dock katmanı (akrilik plaka, yığınlar, Geri Dönüşüm Kutusu)", _s.MacDock, v => _s.MacDock = v));
+            mac.Children.Add(new TextBlock { Text = "Kapalıyken (varsayılan) klasik dock: simgeler Mac gibi dalga hâlinde büyür, tıklayınca sıçrama ve Genie; menü çubuğu üstte. Açıkken uygulamalar Mac dock'ta durur, Başlat ve Ara solda, widget'lar sağda (tek şerit, asla üst üste binmez); Windows görev çubuğunu Mac dock yönetir. Menü çubuğu, Genie, büyütme, ekran ve görev çubuğu ayarları Mac dock ayarlarında (dock'a sağ tık).", Foreground = Brush("#9A9AA0"), TextWrapping = TextWrapping.Wrap, FontSize = 11, Margin = new Thickness(0, 2, 0, 6) });
             if (_openMac != null)
             {
                 var macBtn = new Button { Content = "Mac dock ayarları…", HorizontalAlignment = HorizontalAlignment.Left };
@@ -153,7 +153,7 @@ namespace KutiDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kuti Dock 1.6.1 · MIT · Mac dock motoru: Gravitone (MIT, Stefano Lupano) · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutiDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kuti Dock 1.6.2 · MIT · Mac dock motoru: Gravitone (MIT, Stefano Lupano) · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutiDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }

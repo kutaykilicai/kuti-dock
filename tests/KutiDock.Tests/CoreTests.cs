@@ -276,7 +276,7 @@ public class FloatingDefaultsTests
     public void NewSettingsFloat()
     {
         var s = new Settings().Migrate();
-        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(6, s.Version);
+        Assert.False(s.ReserveSpace); Assert.False(s.FullWidth); Assert.Equal(7, s.Version);
         Assert.Equal(1, s.Widgets.IndexOf("search"));
     }
 
@@ -495,7 +495,7 @@ public class MigrationTests
         var s = Settings.Load(p);
         Assert.Equal(DockStyle.Siyah, s.Style);
         Assert.Equal(new[] { "start", "search", "apps", "ai", "volume", "storage", "screenshot", "battery", "warp", "clock" }, s.Widgets);
-        Assert.Equal(6, s.Version);
+        Assert.Equal(7, s.Version);
         // 1.1 dosyası tekrar taşınmaz: kullanıcı Depolama'yı kapattıysa geri gelmez
         s.Widgets.Remove("storage"); s.Save(p);
         Assert.DoesNotContain("storage", Settings.Load(p).Widgets);
@@ -727,13 +727,34 @@ public class V15Tests
 public class V16Tests
 {
     [Fact]
-    public void V6MigrationTurnsOnMacDock()
+    public void V7MigrationReturnsToClassicDock()
     {
-        var s = new Settings { Version = 5, MacDock = false };
-        s.Migrate();
-        Assert.True(s.MacDock); Assert.Equal(6, s.Version);
-        s.MacDock = false; s.Migrate();            // kullanıcı kapatırsa kapalı kalır
-        Assert.False(s.MacDock);
+        // 1.6.2: 1.5 ve 1.6 kullanıcıları eski klasik dock'a döner; yeni kurulum da klasik
+        foreach (var v in new[] { 4, 5, 6 })
+        {
+            var s = new Settings { Version = v, MacDock = true };
+            s.Migrate();
+            Assert.False(s.MacDock); Assert.Equal(7, s.Version);
+            s.MacDock = true; s.Migrate();         // kullanıcı ayarlardan açarsa açık kalır
+            Assert.True(s.MacDock);
+        }
+        Assert.False(new Settings().MacDock);
+    }
+
+    [Fact]
+    public void ClassicMagnificationGrowsNeighboursWithoutOverlap()
+    {
+        // Gravitone dalgası: imlecin altındaki simge ×1,57, komşular kademeli; yerleşim sabitken hiçbir an üst üste binmez
+        double icon = Magnify.ClassicIcon, max = Magnify.ClassicMax, pitch = Magnify.ClassicPitch;
+        Assert.Equal(max / icon, Magnify.Scale(0, icon, max, 1), 6);
+        Assert.True(Magnify.Scale(pitch, icon, max, 1) > 1.2);          // komşu da büyür
+        Assert.True(Magnify.Scale(2 * pitch, icon, max, 1) > 1);       // ikinci komşu biraz
+        Assert.Equal(1, Magnify.Scale(Magnify.Range(icon) + 1, icon, max, 1));
+        for (double p = 0; p <= pitch; p += 0.25)
+        {
+            double a = icon * Magnify.Scale(p, icon, max, 1), b = icon * Magnify.Scale(pitch - p, icon, max, 1);
+            Assert.True((a + b) / 2 <= pitch + 1e-9, $"imleç {p}: {a:0.0} + {b:0.0} taşıyor");
+        }
     }
 
     [Fact]
