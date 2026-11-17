@@ -24,6 +24,8 @@ namespace KutiDock
         readonly AlertEngine _alerts = new();
         readonly Action<string, string> _notify;
         Border _body;
+        /// <summary>1.6.10: şeridin gövdesi (kayma animasyonu bunun RenderTransform'unda; Genie hedefi bu ötelemeyi çıkarır).</summary>
+        public FrameworkElement SlideBody => _body;
         StackPanel _row;
         List<Tile> _tiles = new();
         Theme _theme;
@@ -305,6 +307,39 @@ namespace KutiDock
                 if (Math.Abs(_lastNatural - before) > 12) NaturalChanged();
             }
             RunAlerts();
+        }
+
+        /// <summary>
+        /// 1.6.10: ilk açılış Genie'si sırasında saklı dock kısa süre yay animasyonuyla belirir, sonra her zamanki gibi saklanır
+        /// (Mac'teki gibi). Tam ekranda, oyun öndeyken ya da kullanıcı gizlediyse gösterilmez. Gösterildiyse true.
+        /// </summary>
+        public bool PeekForLaunch()
+        {
+            try
+            {
+                if (_hwnd == IntPtr.Zero) return false;
+                var mon = DockMonitor;
+                bool fs = Native.ForegroundIsFullscreenOn(mon);
+                bool game = false;
+                var fg = Native.GetForegroundWindow();
+                if (fg != IntPtr.Zero)
+                {
+                    Native.GetWindowThreadProcessId(fg, out uint pid);
+                    var path = Native.ProcessPath(pid) ?? "";
+                    game = path.Length > 0 && OptimizeRules.IsGame(System.IO.Path.GetFileNameWithoutExtension(path), path);
+                }
+                if (!LaunchTarget.ShouldPeek(_s.Settings.Animations, AutoHideOn, _autoHidden, _userHidden, _hiddenForFullscreen, fs, game))
+                {
+                    if (AutoHideOn && !_autoHidden && _auto.Shown) _auto.Peek(DateTime.UtcNow.AddMilliseconds(LaunchTarget.PeekMs)); // zaten açık: Genie bitene kadar açık kalsın
+                    return false;
+                }
+                _auto.Peek(DateTime.UtcNow.AddMilliseconds(LaunchTarget.PeekMs));
+                _autoHidden = false;
+                UpdateVisibility();
+                UpdateLayout();
+                return true;
+            }
+            catch (Exception) { return false; }
         }
 
         public void ToggleUserHidden() { _userHidden = !_userHidden; UpdateVisibility(); }

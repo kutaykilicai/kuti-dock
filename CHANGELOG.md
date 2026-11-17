@@ -1,5 +1,17 @@
 # Değişiklik günlüğü
 
+## 1.6.10 (2026-11-17)
+- Sıfırdan açılan uygulamalarda Genie çoğu zaman oynamıyordu. Kök neden: hata.log'da "İlk açılış Genie: bulundu
+  (Notepad)" ardından "atlandı (Notepad): simge hedefi yok". Simge hedefi `IsVisible` şartı arıyordu; dock genelde
+  kenarda saklı (görünmez pencere) olduğu için hedef hiç bulunamıyordu.
+- Hedef artık dock saklıyken de hesaplanır (`LaunchTarget`): dock penceresinin ekrandaki yeri + simgenin pencere içindeki
+  yeri × o ekranın DPI'si; kayma animasyonunun ötelemesi çıkarılır (simgenin dock açıldığındaki yeri). Simgesi olmayan
+  yeni uygulamada hedef, simgenin dock'ta belireceği yer (son simgenin ardı).
+- Mac'teki gibi: ilk açılışta saklı dock Genie süresince yay animasyonuyla kısa süre belirir (1,5 sn tutulur, sonra her
+  zamanki 0,6 sn gecikmeyle saklanır). Tam ekranda, oyun öndeyken, kullanıcı gizlediyse ya da animasyonlar kapalıysa
+  gösterilmez. hata.log: "İlk açılış Genie: dock kısa süre gösterildi".
+- Testler: gizli dock hedefi (kayma çıkarılır), DPI, yeni simge yeri, gösterim koşulları, tutma ve saklanma süresi.
+
 ## 1.6.9 (2026-11-17)
 - Dock bulunduğu ekrana sığar (`DockFit`): 1.6.8'de ikinci ekranda (1920 px, 96 dpi) 2015 px'lik şerit taşıyordu.
   Kullanılabilir genişlik = çalışma alanı − 2×8 DIP (o ekranın DPI'siyle). Sığmazsa: orantılı ölçek (≥ %70) → ağ/WARP/

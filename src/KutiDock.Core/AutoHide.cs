@@ -9,6 +9,7 @@ namespace KutiDock.Core;
 public sealed class AutoHide
 {
     DateTime? _leftAt;
+    DateTime _holdUntil = DateTime.MinValue;
     public bool Shown { get; private set; } = true;
 
     /// <summary>Durum değiştiyse true.</summary>
@@ -20,7 +21,7 @@ public sealed class AutoHide
             Shown = true; _leftAt = null;
             return true;
         }
-        if (atEdge || overDock || keep) { _leftAt = null; return false; }
+        if (atEdge || overDock || keep || now < _holdUntil) { _leftAt = null; return false; }
         _leftAt ??= now;
         if (now - _leftAt.Value < delay) return false;
         Shown = false; _leftAt = null;
@@ -28,7 +29,10 @@ public sealed class AutoHide
     }
 
     /// <summary>Hemen sakla (ör. tam ekran başlayınca): sonra yeniden ancak kenara gelince belirir.</summary>
-    public void Reset() { Shown = false; _leftAt = null; }
+    public void Reset() { Shown = false; _leftAt = null; _holdUntil = DateTime.MinValue; }
+
+    /// <summary>1.6.10: ilk açılış Genie'si için kısa gösterim: <paramref name="until"/> anına kadar açık kalır, sonra her zamanki gecikmeyle saklanır.</summary>
+    public void Peek(DateTime until) { Shown = true; _leftAt = null; if (until > _holdUntil) _holdUntil = until; }
 
     /// <summary>Fare, monitörün dock tarafındaki <paramref name="band"/> piksellik şeridinde mi.</summary>
     public static bool AtEdge(DockEdge edge, int x, int y, Box monitor, int band = 2)

@@ -7,6 +7,12 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.10'DA NE DEĞİŞTİ
+- Sıfırdan açılan uygulamalarda Genie animasyonu çoğu zaman oynamıyordu: dock kenarda saklıyken simge "görünmez"
+  sayıldığı için hedef bulunamıyordu. Hedef artık dock saklıyken de simgenin dock açıldığındaki yerinden hesaplanır;
+  dock'ta simgesi olmayan yeni uygulamada simgenin belireceği yerden. Mac'teki gibi saklı dock Genie süresince kısa
+  süre belirip geri saklanır; tam ekranda ve oyunda gösterilmez.
+
 1.6.9'DA NE DEĞİŞTİ
 - İkinci ekranda dock taşıyordu: şerit 2015 piksel, ikinci ekran 1920 piksel (iki ekran da %100). Dock artık bulunduğu
   ekranın çalışma alanına kenar boşluklarıyla sığar. Sırayla: simgeler ve aralıklar orantılı küçülür (en az %70); yetmezse

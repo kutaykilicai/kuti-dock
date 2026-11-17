@@ -55,6 +55,7 @@ namespace KutiDock.Tiles
                 && it.Windows.Any(h => h != except && Native.IsWindowVisible(h)));
             LaunchGenie.IconFor = key => () => IconForKey(key);
             LaunchGenie.Enabled = () => S.Settings.Animations;
+            LaunchGenie.Peek = () => Window.GetWindow(this) is DockWindow dw && dw.PeekForLaunch(); // 1.6.10
             LaunchGenie.Start();
             MouseMove += (_, _) => Loop(true);
             MouseLeave += (_, _) => Loop(true);
@@ -288,17 +289,11 @@ namespace KutiDock.Tiles
                     DockEdge.Sag => KutiDock.Mac.Core.DockEdge.Right, _ => (KutiDock.Mac.Core.DockEdge?)null,
                 };
                 if (edge == null || PresentationSource.FromVisual(this) == null) return null;
-                FrameworkElement el = _slots.FirstOrDefault(sl => sl.Outer.Tag is AppItem it && it.Windows.Contains(hwnd))?.Outer;
-                Point a, b;
-                if (el != null && PresentationSource.FromVisual(el) != null)
-                { a = el.PointToScreen(new Point(0, 0)); b = el.PointToScreen(new Point(el.ActualWidth, el.ActualHeight)); }
-                else
-                {
-                    var c = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2)); double h = 20 * K;
-                    a = new Point(c.X - h, c.Y - h); b = new Point(c.X + h, c.Y + h);
-                }
-                var r = new KutiDock.Mac.Interop.RECT((int)Math.Min(a.X, b.X), (int)Math.Min(a.Y, b.Y), (int)Math.Max(a.X, b.X), (int)Math.Max(a.Y, b.Y));
-                return (r, edge.Value, _self());
+                FrameworkElement el = hwnd == IntPtr.Zero ? null : _slots.FirstOrDefault(sl => sl.Outer.Tag is AppItem it && it.Windows.Contains(hwnd))?.Outer;
+                var r = el != null ? ScreenRect(el) : null;
+                // 1.6.10: simgesi henüz olmayan uygulama: simgenin dock'ta belireceği yer (son simgenin ardı)
+                r ??= NewSlotRect();
+                return r == null ? null : (r.Value, edge.Value, _self());
             }
             catch (Exception) { return null; }
         }
@@ -326,13 +321,51 @@ namespace KutiDock.Tiles
                     DockEdge.Alt => KutiDock.Mac.Core.DockEdge.Bottom, DockEdge.Sol => KutiDock.Mac.Core.DockEdge.Left,
                     DockEdge.Sag => KutiDock.Mac.Core.DockEdge.Right, _ => (KutiDock.Mac.Core.DockEdge?)null,
                 };
-                if (edge == null || !target.IsVisible || PresentationSource.FromVisual(target) == null) return null;
-                var a = target.PointToScreen(new Point(0, 0));
-                var b = target.PointToScreen(new Point(target.ActualWidth, target.ActualHeight));
-                var r = new KutiDock.Mac.Interop.RECT((int)Math.Min(a.X, b.X), (int)Math.Min(a.Y, b.Y), (int)Math.Max(a.X, b.X), (int)Math.Max(a.Y, b.Y));
-                return (r, edge.Value, _self());
+                // 1.6.10: dock otomatik gizliyken de (görünmez pencere) simgenin açıldığındaki yeri hesaplanır
+                if (edge == null) return null;
+                var r = ScreenRect(target);
+                return r == null ? null : (r.Value, edge.Value, _self());
             }
             catch (Exception) { return null; }
+        }
+
+        /// <summary>
+        /// 1.6.10: öğenin dock açıkken duracağı ekran dikdörtgeni (piksel). Pencere gizli olsa da çalışır:
+        /// dock penceresinin ekrandaki konumu + öğenin pencere içindeki yeri × DPI; kayma animasyonunun ötelemesi çıkarılır.
+        /// </summary>
+        KutiDock.Mac.Interop.RECT? ScreenRect(FrameworkElement el)
+        {
+            if (el == null || el.ActualWidth <= 0 || PresentationSource.FromVisual(el) == null) return null;
+            var w = Window.GetWindow(el);
+            if (w == null) return null;
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+            if (hwnd == IntPtr.Zero || !Native.GetWindowRect(hwnd, out var wr)) return null;
+            var tl = el.TransformToVisual(w).Transform(new Point(0, 0));
+            var br = el.TransformToVisual(w).Transform(new Point(el.ActualWidth, el.ActualHeight));
+            double sx = 0, sy = 0;
+            if (w is DockWindow dw && dw.SlideBody?.RenderTransform is TranslateTransform tt && dw.SlideBody.IsDescendantOf(w) && el.IsDescendantOf(dw.SlideBody))
+            {
+                var g = dw.SlideBody.TransformToVisual(w);
+                var o = g.Transform(new Point(0, 0)); var m = g.Transform(new Point(tt.X, tt.Y));
+                sx = m.X - o.X; sy = m.Y - o.Y; // A·t: kaymanın pencere koordinatındaki karşılığı
+            }
+            double scale = VisualTreeHelper.GetDpi(w).DpiScaleX;
+            var b = LaunchTarget.ToScreen(wr.Left, wr.Top, Math.Min(tl.X, br.X), Math.Min(tl.Y, br.Y), Math.Abs(br.X - tl.X), Math.Abs(br.Y - tl.Y), scale, sx, sy);
+            return new KutiDock.Mac.Interop.RECT(b.Left, b.Top, b.Right, b.Bottom);
+        }
+
+        /// <summary>1.6.10: yeni uygulamanın simgesinin belireceği yer: son simgenin ardı; simge yoksa şeridin ortası.</summary>
+        KutiDock.Mac.Interop.RECT? NewSlotRect()
+        {
+            var last = _slots.LastOrDefault()?.Outer;
+            var lr = last != null ? ScreenRect(last) : null;
+            var self = ScreenRect(this);
+            if (lr == null && self == null) return null;
+            (double X, double Y, double W, double H)? prev = lr is { } q ? (q.Left, q.Top, q.Right - q.Left, q.Bottom - q.Top) : null;
+            var s = self ?? lr.Value;
+            double size = 42 * K * (Window.GetWindow(this) is Window w ? VisualTreeHelper.GetDpi(w).DpiScaleX : 1);
+            var n = LaunchTarget.NextSlot(prev, DockLayout.Vertical(S.Settings.Edge), (s.Left + s.Right) / 2.0, (s.Top + s.Bottom) / 2.0, size);
+            return new KutiDock.Mac.Interop.RECT((int)Math.Round(n.X), (int)Math.Round(n.Y), (int)Math.Round(n.X + n.W), (int)Math.Round(n.Y + n.H));
         }
 
         bool Genie(IntPtr hwnd, FrameworkElement target, bool restore)

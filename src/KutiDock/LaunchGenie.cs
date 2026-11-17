@@ -45,6 +45,8 @@ namespace KutiDock
         /// <summary>AppsTile verir: anahtarın simge hedefi (çağrıldığı anda hesaplanır; simge yoksa şerit yenilenir).</summary>
         public static Func<string, Func<(KutiDock.Mac.Interop.RECT, KutiDock.Mac.Core.DockEdge, IntPtr)?>> IconFor = _ => () => null;
         public static Func<bool> Enabled = () => false;
+        /// <summary>1.6.10: saklı dock'u Genie süresince kısa gösterir (tam ekran/oyunda göstermez); gösterildiyse true.</summary>
+        public static Func<bool> Peek = () => false;
         static DateTime _armed = DateTime.MaxValue;
 
         static readonly WinEventProc Proc = OnShow; // yerel kod çağırır: canlı tutulmalı
@@ -149,6 +151,7 @@ namespace KutiDock
                 var dock = p.Target()?.Item3 ?? IntPtr.Zero;
                 if (Native.ForegroundIsFullscreen(dock)) { Trace($"atlandı ({exe}): tam ekran"); return; }
                 Trace($"bulundu ({exe}): {(viaDock ? "dock'tan başlatıldı" : "sistem geneli ilk pencere")}");
+                if (Peek()) Trace($"dock kısa süre gösterildi ({exe})");
                 Play(hwnd, p, exe);
             }
             catch (Exception) { }
@@ -187,6 +190,7 @@ namespace KutiDock
                             Trace($"atlandı ({exe}): {LaunchGeniePolicy.PaintTimeoutMs / 1000.0:0.#} sn'de dolu kare çizilmedi; normal gösterildi");
                             guard.Stop(); Reveal(hwnd); return;
                         }
+                        Peek(); // 1.6.10: dock Genie bitene kadar açık kalsın
                         var target = p.Target();
                         bool played = target != null && !Native.IsIconic(hwnd)
                             && ClassicGenie.PlayLaunch(hwnd, c, target.Value.Icon, target.Value.Edge, target.Value.Dock, () => { guard.Stop(); Reveal(hwnd); });

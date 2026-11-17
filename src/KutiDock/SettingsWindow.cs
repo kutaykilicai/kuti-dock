@@ -156,7 +156,7 @@ namespace KutiDock
             al.Children.Add(Number("Sessiz saat başlangıcı (0-23)", _s.QuietStartHour, v => _s.QuietStartHour = Math.Clamp((int)v, 0, 23)));
             al.Children.Add(Number("Sessiz saat bitişi (0-23)", _s.QuietEndHour, v => _s.QuietEndHour = Math.Clamp((int)v, 0, 23)));
 
-            p.Children.Add(new TextBlock { Text = "Kuti Dock 1.6.9 · MIT · Mac dock motoru: Gravitone (MIT, Stefano Lupano) · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutiDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
+            p.Children.Add(new TextBlock { Text = "Kuti Dock 1.6.10 · MIT · Mac dock motoru: Gravitone (MIT, Stefano Lupano) · hesap yok, telemetri yok. Veriler: %APPDATA%\\KutiDock", Foreground = Brush("#6A6A70"), FontSize = 11, Margin = new Thickness(0, 8, 0, 16) });
             root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             return root;
         }
