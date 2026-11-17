@@ -1,5 +1,15 @@
 # Değişiklik günlüğü
 
+## 1.6.7 (2026-11-17)
+- WhatsApp Web PWA dock'tan küçültülemiyordu. Kök neden: Chrome pencere AUMID'sinde uygulama kimliğini ortadan kısaltıyor
+  (`--app-id=hnpfjngllnobngcgfapefoaidbinmjnm` → `Chrome._crx_hnpfjngllnfapefoaidbinmjnm`); anahtar tutmadığı için pencere
+  sabitlenmiş simgeye bağlanmıyor, tıklama yeni başlatma sayılıyordu. `AppGrouping.SameCrx/SameKey/Resolve`: kısaltılmış
+  kimlik baş+son olarak eşleşir; olmazsa Chromium penceresinin başlığı PWA kısayolunun adıyla birebir aynıysa o simge.
+- İlk açılış Genie'si sistem genelinde (EVENT_OBJECT_SHOW + AUMID/exe): dock dışından açılanlar ve 5 sn'den geç pencere
+  açan uygulamalar (Grok Bot/Electron) da simgeden açılır; dock'ta olmayan uygulama yeni simgesinden. Kararlar hata.log'a
+  ("İlk açılış Genie: bulundu/oynatıldı/zaman aşımı/atlandı ve nedeni").
+- Testler: kısaltılmış Chrome kimliği (Kasa'daki gerçek değerler), başlık yedeği, pencere şekli/UAC elemesi.
+
 ## 1.6.6 (2026-11-17)
 - Ses bölümü onarıldı. Kök neden: Mac menü çubuğu (Gravitone) aynı CLSID için kendi `[ComImport] MMDeviceEnumerator`
   sınıfını tanımlıyor ve açılışta önce oluşturuyordu; .NET bu COM nesnesini ilk sınıf türüyle eşlediği için dock'un

@@ -7,6 +7,17 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.7'DA NE DEĞİŞTİ
+- WhatsApp Web (Chrome uygulaması) dock'tan küçültülemiyordu. Kök neden: Chrome pencerenin AppUserModelID'sinde uygulama
+  kimliğini ortadan kısaltıyor (kısayolda 32 karakter, pencerede 26); kimlikler tutmadığı için pencere sabitlenmiş simgeye
+  bağlanmıyor, simgeye basmak yeni başlatma sayılıyordu. Kısaltılmış kimlik artık eşleşiyor; olmazsa pencere başlığı
+  kısayol adıyla birebir aynıysa o simgeye bağlanır.
+- İlk açılış Genie'si artık sistem genelinde: dock'ta simgesi olan bir uygulamanın ilk penceresi nereden açılırsa açılsın
+  (Başlat, masaüstü kısayolu, dock) o simgeden büyür; dock'ta olmayan uygulama için yeni beliren simgeden. Kök neden:
+  1.6.6 yalnızca dock'tan başlatmayı 5 sn izliyordu; geç açılan (Grok Bot gibi Electron) ya da dock dışından açılan
+  uygulamalar kaçıyordu. Kararlar hata.log'a "İlk açılış Genie:" satırıyla yazılır. Tam ekran, oyun, UAC, araç ipucu,
+  açılır menü ve iletişim kutularında çalışmaz.
+
 1.6.6'DA NE DEĞİŞTİ
 - Ses: aygıt listesi boş, kaydırıcı etkisizdi. Kök neden: üst menü çubuğu (Gravitone) ses aygıtı
   sayıcısı için aynı COM kimliğiyle kendi sınıfını tanımlıyor ve açılışta önce oluşturuyordu; .NET nesneyi o sınıfla

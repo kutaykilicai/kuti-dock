@@ -154,3 +154,60 @@ public class ComWorkerTests
         Assert.Equal(-1, w.Run(() => { Thread.Sleep(400); return 1; }, -1));
     }
 }
+
+public class V167Tests
+{
+    // Kasa'da okunan gerçek değerler: kısayol --app-id ve pencerenin PKEY_AppUserModel_ID'si
+    const string Full = "hnpfjngllnobngcgfapefoaidbinmjnm", WindowAumid = "Chrome._crx_hnpfjngllnfapefoaidbinmjnm";
+
+    [Fact]
+    public void ShortenedChromeAumid_MatchesPinnedWhatsApp()
+    {
+        Assert.True(AppGrouping.SameCrx(Full, AppGrouping.CrxId(WindowAumid)));
+        var pinned = AppGrouping.PinnedKey(@"C:\x\WhatsApp Web.lnk", @"C:\c\chrome_proxy.exe", $"--profile-directory=Default --app-id={Full}", null);
+        var win = AppGrouping.WindowKey(@"C:\c\chrome.exe", WindowAumid, false);
+        Assert.NotEqual(pinned, win);                 // 1.6.6'daki hata: anahtarlar tutmuyordu
+        Assert.True(AppGrouping.SameKey(pinned, win)); // 1.6.7
+        var list = new[] { (@"c:\c\chrome.exe", "Google Chrome"), (pinned, "WhatsApp Web") };
+        Assert.Equal(pinned, AppGrouping.Resolve(win, "WhatsApp Web", true, list));
+        Assert.True(LaunchGeniePolicy.Matches(pinned, win));
+    }
+
+    [Fact]
+    public void DifferentCrxIds_DoNotMatch()
+    {
+        Assert.False(AppGrouping.SameCrx(Full, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        Assert.False(AppGrouping.SameCrx(Full, "hnpfjnglln"));                   // çok kısa
+        Assert.False(AppGrouping.SameKey("crx:" + Full, @"c:\c\chrome.exe"));
+    }
+
+    [Fact]
+    public void TitleFallback_OnlyForPwaShortcuts()
+    {
+        var pinned = "crx:" + Full;
+        var list = new[] { (@"c:\c\chrome.exe", "Google Chrome"), (pinned, "WhatsApp Web") };
+        // AUMID okunamadı (düz Chrome) ama başlık kısayol adıyla birebir aynı: PWA penceresi
+        Assert.Equal(pinned, AppGrouping.Resolve(@"c:\c\chrome.exe", "WhatsApp Web", true, list));
+        // tarayıcı sekmesi başlığı: Chrome'da kalır
+        Assert.Equal(@"c:\c\chrome.exe", AppGrouping.Resolve(@"c:\c\chrome.exe", "WhatsApp Web - Google Chrome", true, list));
+        // Chromium olmayan pencere başlıkla bağlanmaz
+        Assert.Equal(@"c:\x\notepad.exe", AppGrouping.Resolve(@"c:\x\notepad.exe", "WhatsApp Web", false, list));
+        // Electron uygulaması (Grok Bot) kendi exe anahtarıyla sabitlenmiş simgesine
+        var grok = @"c:\users\k\appdata\local\programs\grok bot\grok bot.exe";
+        Assert.Equal(grok, AppGrouping.Resolve(@"C:\Users\K\AppData\Local\Programs\Grok Bot\Grok Bot.exe".ToLowerInvariant(), "Grok Bot", true,
+            new[] { (grok, "Grok Bot") }));
+    }
+
+    [Fact]
+    public void MainWindowShape_ExcludesTooltipsMenusPopups()
+    {
+        Assert.True(LaunchGeniePolicy.MainWindowShape(false, true, 1280, 800, "Chrome_WidgetWin_1"));
+        Assert.False(LaunchGeniePolicy.MainWindowShape(false, false, 300, 200, "tooltips_class32"));
+        Assert.False(LaunchGeniePolicy.MainWindowShape(false, true, 300, 200, "#32768"));
+        Assert.False(LaunchGeniePolicy.MainWindowShape(true, true, 600, 400, "#32770"));   // sahipli iletişim kutusu
+        Assert.False(LaunchGeniePolicy.MainWindowShape(false, false, 600, 400, "Popup"));  // çerçevesiz açılır pencere
+        Assert.True(LaunchGeniePolicy.IsUac("Credential Dialog Xaml Host", "x"));
+        Assert.True(LaunchGeniePolicy.IsUac("X", "consent"));
+        Assert.False(LaunchGeniePolicy.IsUac("Chrome_WidgetWin_1", "Grok Bot"));
+    }
+}

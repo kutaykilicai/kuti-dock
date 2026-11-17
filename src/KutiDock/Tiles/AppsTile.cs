@@ -49,6 +49,13 @@ namespace KutiDock.Tiles
             MinimizeGenie.Target = TargetFor;
             MinimizeGenie.Enabled = () => S.Settings.Animations;
             MinimizeGenie.Start();
+            // 1.6.7: ilk açılış Genie'si sistem genelinde (dock dışından açılanlar da): pencere hangi simgeye bağlanır, açık mı, simge nerede
+            LaunchGenie.ResolveKey = ResolveKey;
+            LaunchGenie.HasOpenWindows = (key, except) => _slots.Any(sl => sl.Outer.Tag is AppItem it && AppGrouping.SameKey(it.Key, key)
+                && it.Windows.Any(h => h != except && Native.IsWindowVisible(h)));
+            LaunchGenie.IconFor = key => () => IconForKey(key);
+            LaunchGenie.Enabled = () => S.Settings.Animations;
+            LaunchGenie.Start();
             MouseMove += (_, _) => Loop(true);
             MouseLeave += (_, _) => Loop(true);
         }
@@ -157,6 +164,7 @@ namespace KutiDock.Tiles
                 // 1.6.6: her pencerenin AppUserModelID'sine bakılır: Chrome'dan kurulan uygulamalar (WhatsApp vb.) kendi simgesine bağlanır
                 string aumid = Native.AppUserModelId(h);
                 string key = AppGrouping.WindowKey(path, aumid, packaged), name, launch, icon;
+                key = ResolveKey(key, Native.WindowTitle(h), Native.ClassName(h).StartsWith("Chrome_WidgetWin", StringComparison.Ordinal)); // 1.6.7
                 if (key.StartsWith("crx:")) { launch = icon = @"shell:AppsFolder\" + aumid; name = Native.WindowTitle(h); }
                 else if (key.StartsWith("aumid:")) { launch = icon = @"shell:AppsFolder\" + aumid; name = frame ? Native.WindowTitle(h) : Services.AppName(path); }
                 else if (frame) continue; // kimliği çözülemeyen boş UWP çerçevesi (askıdaki uygulama) gösterilmez
@@ -293,6 +301,19 @@ namespace KutiDock.Tiles
                 return (r, edge.Value, _self());
             }
             catch (Exception) { return null; }
+        }
+
+        /// <summary>1.6.7: pencere anahtarını sabitlenmiş simgeye çözer (kısaltılmış Chrome kimliği, PWA başlığı).</summary>
+        string ResolveKey(string key, string title, bool chromium) =>
+            AppGrouping.Resolve(key, title, chromium, Pinned().Select(p => (p.Key, p.Name)));
+
+        /// <summary>1.6.7: anahtarın dock simgesi; yoksa (dock'ta olmayan uygulama) şerit yenilenir ve yeni simge kullanılır.</summary>
+        (KutiDock.Mac.Interop.RECT, KutiDock.Mac.Core.DockEdge, IntPtr)? IconForKey(string key)
+        {
+            FrameworkElement Find() => _slots.FirstOrDefault(sl => sl.Outer.Tag is AppItem it && AppGrouping.SameKey(it.Key, key))?.Outer;
+            var el = Find();
+            if (el == null) { try { Refresh(); UpdateLayout(); } catch (Exception) { } el = Find(); }
+            return el != null ? IconTarget(el) : TargetFor(IntPtr.Zero);
         }
 
         /// <summary>Simgenin ekran dikdörtgeni, kenar ve dock penceresi (Genie hedefi); dock üstteyse ya da simge görünmüyorsa null.</summary>

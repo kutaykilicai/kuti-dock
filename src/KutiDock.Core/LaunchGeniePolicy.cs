@@ -9,7 +9,7 @@ public static class LaunchGeniePolicy
     /// <summary>Başlatmadan sonra ilk pencere bu sürede görünmezse normal açılışa bırakılır.</summary>
     public const int WindowTimeoutMs = 5000;
     /// <summary>Pencere bulunduktan sonra ilk dolu karenin beklenmesi için üst sınır; aşılırsa pencere normal gösterilir.</summary>
-    public const int PaintTimeoutMs = 1500;
+    public const int PaintTimeoutMs = 2000;
     public const int PollMs = 70;
 
     static readonly HashSet<string> Blocked = new(StringComparer.OrdinalIgnoreCase)
@@ -32,7 +32,21 @@ public static class LaunchGeniePolicy
           || expectedKey.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
 
     public static bool Matches(string expectedKey, string windowKey) =>
-        AcceptsAny(expectedKey) || string.Equals(expectedKey, windowKey, StringComparison.OrdinalIgnoreCase);
+        AcceptsAny(expectedKey) || AppGrouping.SameKey(expectedKey, windowKey);
+
+    static readonly HashSet<string> Uac = new(StringComparer.OrdinalIgnoreCase)
+    { "Credential Dialog Xaml Host", "$$$Secure UAP Dummy Window Class For Interim Dialog" };
+
+    public static bool IsUac(string className, string processName) =>
+        Uac.Contains(className) || processName.Equals("consent", StringComparison.OrdinalIgnoreCase)
+        || processName.Equals("credentialuibroker", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 1.6.7: sistem geneli kancada ucuz ilk eleme (süreç sorgusu yok): araç ipucu, açılır menü (#32768), sahipli iletişim
+    /// kutusu, çerçevesiz ya da küçük pencere ana pencere sayılmaz.
+    /// </summary>
+    public static bool MainWindowShape(bool toolOrOwned, bool hasFrame, int width, int height, string className) =>
+        !toolOrOwned && hasFrame && width >= 200 && height >= 120 && !Blocked.Contains(className);
 
     /// <summary>Yeni görünen pencere bir uygulamanın ana penceresi olabilir mi (araç/sahipli/küçük/UAC/oyun değil).</summary>
     public static bool Candidate(bool ownProcess, bool toolOrOwned, bool hasFrame, int width, int height,
