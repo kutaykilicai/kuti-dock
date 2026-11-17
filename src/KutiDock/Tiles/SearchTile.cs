@@ -183,21 +183,28 @@ namespace KutiDock.Tiles
         {
             var q = _box.Text.Trim();
             int seq = ++_seq;
+            if (_everything && q.Length == 0) { _list.Items.Clear(); _status.Text = "Everything ile ara · Enter aç · Ctrl+Enter klasörde göster · Esc kapat"; return; }
+            if (q.Length == 0) { Show(WindowsSearch.Recent(8), "Son dosyalar"); return; }
+            // 1.6.10: her iki kipte de önce Uygulamalar, sonra Ayarlar/Denetim Masası, en son Dosyalar (yalnızca kullanıcı klasörleri)
+            var apps = WindowsSearch.Apps(q, 6).ToList();
+            var settings = WindowsSearch.Settings(q, 4).ToList();
+            Show(WinSearch.Merge(apps, settings, Array.Empty<QuickHit>()), null);
+            string noApp = apps.Count == 0 ? $"\"{q}\" adında yüklü uygulama yok · Enter aç · Esc kapat" : null;
+            if (noApp != null) _status.Text = noApp;
+            List<QuickHit> files;
             if (_everything)
             {
-                if (q.Length == 0) { _list.Items.Clear(); _status.Text = "Everything ile ara · Enter aç · Ctrl+Enter klasörde göster · Esc kapat"; return; }
-                var hits = await _ev.Search(q, 20);
+                var roots = WindowsSearch.UserRoots();
+                var hits = await _ev.Search(WinSearch.EverythingQuery(q, roots), 40);
                 if (seq != _seq) return;
-                if (hits == null) { _list.Items.Clear(); _status.Text = "Everything çalışmıyor (Kuti Dock onu başlatmaz)."; return; }
-                Show(hits.Select(h => new QuickHit(HitKind.File, h.Name, h.Folder, h.FullPath)).ToList(), null);
-                return;
+                if (hits == null) { if (apps.Count + settings.Count == 0) { _list.Items.Clear(); } _status.Text = "Everything çalışmıyor (Kuti Dock onu başlatmaz)."; return; }
+                files = hits.Select(h => new QuickHit(HitKind.File, h.Name, h.Folder, h.FullPath))
+                    .Where(h => WinSearch.AllowedFile(h.Target, roots)).Take(8).ToList();
             }
-            if (q.Length == 0) { Show(WindowsSearch.Recent(8), "Son dosyalar"); return; }
-            var quick = WindowsSearch.Apps(q, 6).Concat(WindowsSearch.Settings(q, 4)).ToList();
-            Show(quick, null);
-            var files = await WindowsSearch.FilesAsync(q, 8);
+            else files = await WindowsSearch.FilesAsync(q, 8);
             if (seq != _seq || files.Count == 0) return;
-            Show(quick.Concat(files).ToList(), null);
+            Show(WinSearch.Merge(apps, settings, files), null);
+            if (noApp != null) _status.Text = noApp;
         }
 
         void Show(List<QuickHit> hits, string header)
@@ -208,7 +215,7 @@ namespace KutiDock.Tiles
             HitKind? last = null;
             foreach (var h in hits)
             {
-                if (!_everything && header == null && h.Kind != last)
+                if (header == null && h.Kind != last)
                 {
                     _list.Items.Add(new ListBoxItem { Content = new TextBlock { Text = h.Kind switch { HitKind.App => "Uygulamalar", HitKind.Setting => "Ayarlar", _ => "Dosyalar" }, Foreground = Theme.B("#9A9AA0"), FontSize = 11, Margin = new Thickness(2, 6, 0, 0) }, IsEnabled = false, Focusable = false });
                     last = h.Kind;
@@ -289,17 +296,38 @@ namespace KutiDock.Tiles
         {
             if (_apps != null && DateTime.Now - _appsAt < TimeSpan.FromMinutes(2)) return _apps;
             var list = new List<(string, string)>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // 1.6.10: Uygulamalar klasörü (masaüstü + UWP/Mağaza/Office) geç bağlamayla değil açık IDispatch çağrısıyla okunur
             try
             {
-                dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
-                dynamic folder = shell.NameSpace("shell:::{4234d49b-0245-4df3-b780-3893943456e1}");
-                foreach (dynamic item in folder.Items())
+                object shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
+                object folder = Call(shell, "NameSpace", "shell:::{4234d49b-0245-4df3-b780-3893943456e1}");
+                object items = folder == null ? null : Call(folder, "Items");
+                int count = items == null ? 0 : Convert.ToInt32(Get(items, "Count"));
+                for (int i = 0; i < count; i++)
                 {
-                    string name = item.Name, path = item.Path;
-                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(path)) list.Add((name, @"shell:AppsFolder\" + path));
+                    var item = Call(items, "Item", i);
+                    if (item == null) continue;
+                    var name = Get(item, "Name") as string; var path = Get(item, "Path") as string;
+                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(path) && seen.Add(name)) list.Add((name, @"shell:AppsFolder\" + path));
                 }
             }
             catch (Exception) { }
+            // Başlat menüsü kısayolları (kullanıcı ve ortak): Uygulamalar klasörü okunamazsa da uygulamalar bulunur
+            foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), Environment.GetFolderPath(Environment.SpecialFolder.StartMenu) })
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(root) || !System.IO.Directory.Exists(root)) continue;
+                    foreach (var lnk in System.IO.Directory.EnumerateFiles(root, "*.lnk", System.IO.SearchOption.AllDirectories))
+                    {
+                        var name = System.IO.Path.GetFileNameWithoutExtension(lnk);
+                        if (name.Contains("uninstall", StringComparison.OrdinalIgnoreCase) || name.Contains("kaldır", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (seen.Add(name)) list.Add((name, lnk));
+                    }
+                }
+                catch (Exception) { }
+            }
             _appsAt = DateTime.Now;
             return _apps = list;
         }
@@ -307,8 +335,30 @@ namespace KutiDock.Tiles
         public static IEnumerable<QuickHit> Apps(string q, int take) =>
             WinSearch.Rank(AllApps(), a => a.Name, q, take).Select(a => new QuickHit(HitKind.App, a.Name, "Uygulama", a.Target));
 
+        static object Call(object o, string name, params object[] args) => o.GetType().InvokeMember(name, System.Reflection.BindingFlags.InvokeMethod, null, o, args);
+        static object Get(object o, string name) => o.GetType().InvokeMember(name, System.Reflection.BindingFlags.GetProperty, null, o, null);
+
         public static IEnumerable<QuickHit> Settings(string q, int take) =>
-            WinSearch.Rank(WinSearch.SettingsPages, p => p.Name, q, take).Select(p => new QuickHit(HitKind.Setting, p.Name, "Ayarlar", p.Uri));
+            WinSearch.Rank(WinSearch.SettingsPages.Select(p => (p.Name, Detail: "Ayarlar", Target: p.Uri))
+                    .Concat(WinSearch.ControlPanelItems.Select(c => (c.Name, Detail: "Denetim Masası", c.Target))), p => p.Name, q, take)
+                .Select(p => new QuickHit(HitKind.Setting, p.Name, p.Detail, p.Target));
+
+        [DllImport("shell32.dll")] static extern int SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid id, uint flags, IntPtr token, out IntPtr path);
+
+        /// <summary>1.6.10: dosya aramasının sınırı: Masaüstü, Belgeler, İndirilenler, Resimler.</summary>
+        public static List<string> UserRoots()
+        {
+            string downloads = null;
+            try
+            {
+                if (SHGetKnownFolderPath(new Guid("374DE290-123F-4565-9164-39C4925E467B"), 0, IntPtr.Zero, out var p) == 0)
+                { downloads = Marshal.PtrToStringUni(p); Marshal.FreeCoTaskMem(p); }
+            }
+            catch (Exception) { }
+            downloads ??= System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            return new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), downloads, Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) }
+                .Where(r => !string.IsNullOrEmpty(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
 
         /// <summary>Windows Search dizininden dosya adları (OLE DB, Search.CollatorDSO). Dizin hizmeti yoksa boş.</summary>
         public static Task<List<QuickHit>> FilesAsync(string q, int take) => Task.Run(() =>
@@ -318,12 +368,14 @@ namespace KutiDock.Tiles
             {
                 using var c = new System.Data.OleDb.OleDbConnection("Provider=Search.CollatorDSO;Extended Properties='Application=Windows';");
                 c.Open();
-                using var cmd = new System.Data.OleDb.OleDbCommand(WinSearch.IndexSql(q, take), c);
+                var roots = UserRoots();
+                using var cmd = new System.Data.OleDb.OleDbCommand(WinSearch.IndexSql(q, take * 4, roots), c);
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                 {
                     var path = r.IsDBNull(0) ? null : r.GetValue(0) as string;
-                    if (string.IsNullOrEmpty(path)) continue;
+                    if (string.IsNullOrEmpty(path) || !WinSearch.AllowedFile(path, roots)) continue;
+                    if (list.Count >= take) break;
                     list.Add(new QuickHit(HitKind.File, System.IO.Path.GetFileName(path), System.IO.Path.GetDirectoryName(path) ?? "", path));
                 }
             }

@@ -12,6 +12,9 @@ Ne bu?
   sayıldığı için hedef bulunamıyordu. Hedef artık dock saklıyken de simgenin dock açıldığındaki yerinden hesaplanır;
   dock'ta simgesi olmayan yeni uygulamada simgenin belireceği yerden. Mac'teki gibi saklı dock Genie süresince kısa
   süre belirip geri saklanır; tam ekranda ve oyunda gösterilmez.
+- Arama: "word" yazınca program klasörlerindeki derin dosyalar çıkıyordu. Artık önce uygulamalar, sonra Ayarlar ve
+  Denetim Masası, en son yalnızca Masaüstü/Belgeler/İndirilenler/Resimler'deki dosyalar listelenir (AppData, .grok,
+  Tools, dist, node_modules ve sistem klasörleri hariç). Enter en üstteki uygulamayı açar.
 
 1.6.9'DA NE DEĞİŞTİ
 - İkinci ekranda dock taşıyordu: şerit 2015 piksel, ikinci ekran 1920 piksel (iki ekran da %100). Dock artık bulunduğu

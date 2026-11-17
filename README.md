@@ -107,7 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
-- **1.6.10** Sıfırdan açılan uygulamalar dock saklıyken de simgeden Genie ile açılır; dock kısa süre belirir.
+- **1.6.10** Sıfırdan açılan uygulamalar dock saklıyken de simgeden Genie ile açılır; dock kısa süre belirir. Arama önce uygulamaları gösterir.
 - **1.6.9** Dock her ekrana kenar boşluklarıyla sığar (küçültme, kompakt grup, taşma menüsü).
 - **1.6.8** Dock fareyi takip eder: saklıyken hangi ekranın kenarına gidersen orada belirir.
 - **1.6.7** WhatsApp Web gibi Chrome uygulamaları dock'tan küçülür; ilk açılış Genie'si sistem genelinde.

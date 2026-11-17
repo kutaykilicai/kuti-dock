@@ -10,6 +10,13 @@
 - Mac'teki gibi: ilk açılışta saklı dock Genie süresince yay animasyonuyla kısa süre belirir (1,5 sn tutulur, sonra her
   zamanki 0,6 sn gecikmeyle saklanır). Tam ekranda, oyun öndeyken, kullanıcı gizlediyse ya da animasyonlar kapalıysa
   gösterilmez. hata.log: "İlk açılış Genie: dock kısa süre gösterildi".
+- Dock araması ("word" yazınca yalnızca .grok\bundled\skills altındaki xsd/tcl/jdk dosyaları): Everything ayarı doğru okunuyordu
+  (kapalı; Everything çağrılmıyordu). Kök neden: Windows Search dizini `SCOPE='file:'` ile tüm dizinde aranıyordu (program
+  ve araç klasörleri dahil); Kasa'da Microsoft Word kurulu olmadığından Uygulamalar boş kalıyordu. Düzeltme: sıralama
+  her iki kipte Uygulamalar → Ayarlar/Denetim Masası → Dosyalar; uygulamalar Uygulamalar klasörü (UWP/Mağaza/Office) +
+  Başlat menüsü kısayolları (kullanıcı ve ortak), kelime tam eşleşmesi (90: "word" → "Microsoft Word") ve baş harf
+  eşleşmesi; dosyalar yalnızca Masaüstü/Belgeler/İndirilenler/Resimler, AppData/.grok/Tools/dist/node_modules/sistem
+  klasörleri hariç (Everything açıkken de). Uygulama bulunamazsa durum satırı söyler. Enter en üstteki öğeyi açar.
 - Testler: gizli dock hedefi (kayma çıkarılır), DPI, yeni simge yeri, gösterim koşulları, tutma ve saklanma süresi.
 
 ## 1.6.9 (2026-11-17)

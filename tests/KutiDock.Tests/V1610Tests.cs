@@ -71,3 +71,62 @@ public class LaunchTargetTests
         Assert.False(a.Shown);
     }
 }
+
+/// <summary>1.6.10: dock araması: önce uygulamalar ("word" → Microsoft Word), dosyalar yalnızca kullanıcı klasörlerinden.</summary>
+public class SearchOrderTests
+{
+    static readonly string[] Roots = { @"C:\Users\Kutay\Desktop", @"C:\Users\Kutay\Documents", @"C:\Users\Kutay\Downloads", @"C:\Users\Kutay\Pictures" };
+
+    [Fact]
+    public void Word_MicrosoftWordFirst()
+    {
+        var apps = new[] { "WordPad", "Word Mobile Viewer", "Microsoft Word", "Wordle Helper", "Microsoft Excel", "Notepad" };
+        var r = WinSearch.Rank(apps, a => a, "word", 6);
+        Assert.Equal("Microsoft Word", r[0]);
+        Assert.DoesNotContain("Microsoft Excel", r);
+        Assert.Equal(90, WinSearch.Score("Microsoft Word", "word"));
+        Assert.Equal(50, WinSearch.Score("Visual Studio Code", "vsc"));
+    }
+
+    [Fact]
+    public void Order_AppsThenSettingsThenFiles_EnterOpensTopApp()
+    {
+        var files = new[] { new QuickHit(HitKind.File, "word.tcl", @"C:\Users\Kutay\Documents", @"C:\Users\Kutay\Documents\word.tcl") };
+        var settings = new[] { new QuickHit(HitKind.Setting, "Ses", "Ayarlar", "ms-settings:sound") };
+        var apps = new[] { new QuickHit(HitKind.App, "Microsoft Word", "Uygulama", @"shell:AppsFolder\Microsoft.Office.WINWORD.EXE.15") };
+        var m = WinSearch.Merge(apps, settings, files);
+        Assert.Equal(new[] { HitKind.App, HitKind.Setting, HitKind.File }, m.Select(h => h.Kind));
+        Assert.Equal("Microsoft Word", m[0].Name); // Enter: ilk seçilebilir öğe
+        // dosyalar önce gelse bile uygulamalar başa alınır (Everything açıkken de)
+        Assert.Equal(HitKind.App, WinSearch.Merge(Array.Empty<QuickHit>(), Array.Empty<QuickHit>(), files.Concat(apps))[0].Kind);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\Kutay\Documents\Rapor word.docx", true)]
+    [InlineData(@"C:\Users\Kutay\Desktop\Ai projeler\notlar\word.txt", true)]
+    [InlineData(@"C:\Users\Kutay\.grok\bundled\skills\docx\ooxml\schemas\wordml.xsd", false)]
+    [InlineData(@"C:\Users\Kutay\AppData\Local\Programs\x\word.tcl", false)]
+    [InlineData(@"C:\Users\Kutay\Desktop\Tools\jdk\lib\word.jar", false)]
+    [InlineData(@"C:\Users\Kutay\Documents\proje\node_modules\word\index.js", false)]
+    [InlineData(@"C:\Users\Kutay\Desktop\KutayDock\dist\word.txt", false)]
+    [InlineData(@"C:\Program Files\Java\jdk\word.txt", false)]
+    [InlineData(@"C:\Windows\System32\word.dll", false)]
+    [InlineData(@"C:\Users\Kutay\Downloads\tools.zip", true)] // yalnızca klasör adları hariç tutulur
+    public void Files_OnlyUserFolders(string path, bool allowed) => Assert.Equal(allowed, WinSearch.AllowedFile(path, Roots));
+
+    [Fact]
+    public void IndexSql_ScopedToUserFolders()
+    {
+        var sql = WinSearch.IndexSql("word", 32, Roots);
+        Assert.Contains("SCOPE='file:C:/Users/Kutay/Desktop'", sql);
+        Assert.Contains(" OR SCOPE='file:C:/Users/Kutay/Pictures'", sql);
+        Assert.DoesNotContain("SCOPE='file:' ", sql);
+    }
+
+    [Fact]
+    public void EverythingQuery_ScopedToUserFolders()
+    {
+        var q = WinSearch.EverythingQuery(" word ", new[] { @"C:\Users\Kutay\Desktop\", @"C:\Users\Kutay\Documents" });
+        Assert.Equal("<\"C:\\Users\\Kutay\\Desktop\\\"|\"C:\\Users\\Kutay\\Documents\\\"> word", q);
+    }
+}
