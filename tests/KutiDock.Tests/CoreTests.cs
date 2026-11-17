@@ -826,3 +826,39 @@ public class V163Tests
         Assert.False(AutoHide.AtEdge(DockEdge.Sag, 2000, 700, primary));
     }
 }
+
+public class V164Tests
+{
+    [Fact]
+    public void PanelsCloseOnOutsideClickAndEscape()
+    {
+        // Masaüstü, başka pencere, ikinci monitör: kapanır
+        Assert.True(OutsideClick.Closes(OutsideClick.WM_LBUTTONDOWN, overOwnPopup: false, overAnchorDock: false));
+        Assert.True(OutsideClick.Closes(OutsideClick.WM_RBUTTONDOWN, false, false));
+        Assert.True(OutsideClick.Closes(OutsideClick.WM_MBUTTONDOWN, false, false));
+        // Panelin kendisi/alt menüsü ve dock (dock içini WPF kapatır, kartın kendisi aç/kapat yapar): kancayla kapanmaz
+        Assert.False(OutsideClick.Closes(OutsideClick.WM_LBUTTONDOWN, true, false));
+        Assert.False(OutsideClick.Closes(OutsideClick.WM_LBUTTONDOWN, false, true));
+        // Fare hareketi, bırakma: kapanmaz
+        Assert.False(OutsideClick.Closes(0x200 /*MOUSEMOVE*/, false, false));
+        Assert.False(OutsideClick.Closes(0x202 /*LBUTTONUP*/, false, false));
+        Assert.True(OutsideClick.IsEscape(OutsideClick.WM_KEYDOWN, OutsideClick.VK_ESCAPE));
+        Assert.False(OutsideClick.IsEscape(0x101 /*KEYUP*/, OutsideClick.VK_ESCAPE));
+        Assert.False(OutsideClick.IsEscape(OutsideClick.WM_KEYDOWN, 0x0D));
+    }
+
+    [Fact]
+    public void MinimizeButtonGenieTracksOnlyNormalAppWindows()
+    {
+        Assert.True(MinimizeGeniePolicy.Track(enabled: true, ownWindow: false, appWindow: true, fullscreen: false, gameRunning: false));
+        Assert.False(MinimizeGeniePolicy.Track(false, false, true, false, false));  // animasyonlar kapalı
+        Assert.False(MinimizeGeniePolicy.Track(true, true, true, false, false));    // dock'un kendi penceresi
+        Assert.False(MinimizeGeniePolicy.Track(true, false, false, false, false));  // araç/sahipli pencere
+        Assert.False(MinimizeGeniePolicy.Track(true, false, true, true, false));    // tam ekran video
+        Assert.False(MinimizeGeniePolicy.Track(true, false, true, false, true));    // oyun
+        var t = new DateTime(2026, 11, 17, 3, 0, 0);
+        Assert.True(MinimizeGeniePolicy.Usable(t, t.AddSeconds(29)));
+        Assert.False(MinimizeGeniePolicy.Usable(t, t.AddSeconds(31)));          // eski görüntü: normal küçültme
+        Assert.True(MinimizeGeniePolicy.Refresh >= TimeSpan.FromSeconds(2));    // düşük maliyet
+    }
+}

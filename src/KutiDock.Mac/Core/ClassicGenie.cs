@@ -14,6 +14,8 @@ internal static class ClassicGenie
     static readonly Dictionary<IntPtr, GenieCapture> Cache = [];
     static readonly List<IntPtr> Order = [];
     static GenieAnimation? _running;
+    static readonly HashSet<IntPtr> OwnMinimize = [];          // dock tıklamasıyla başlayan küçültmeler (kanca ikinci kez oynatmasın)
+    static (IntPtr Hwnd, GenieCapture Capture, DateTime At)? _fresh; // öndeki pencerenin son görüntüsü
     const int CacheMax = 5; // tam ekran yakalama ~8 MB
 
     static void SetTransitions(IntPtr hwnd, bool disabled)
@@ -39,9 +41,10 @@ internal static class ClassicGenie
             if (capture is null) return Skip("minimize", GenieCapture.LastFailure);
             Remember(hwnd, capture);
             SetTransitions(hwnd, true); // Windows'un kendi küçültmesi altta oynamasın
+            OwnMinimize.Add(hwnd);
             var a = new GenieAnimation(capture, icon, edge, expand: false,
                 started: () => WindowActions.Minimize(hwnd), finished: () => { }, durationMs: 520, lingerMs: 0);
-            a.Ended += () => { SetTransitions(hwnd, false); _running = null; if (!IsIconic(hwnd)) Cache.Remove(hwnd); };
+            a.Ended += () => { SetTransitions(hwnd, false); _running = null; OwnMinimize.Remove(hwnd); if (!IsIconic(hwnd)) Cache.Remove(hwnd); };
             _running = a;
             if (a.Start(dock)) return true;
             _running = null; SetTransitions(hwnd, false);
@@ -70,6 +73,53 @@ internal static class ClassicGenie
         }
         catch (Exception ex) { _running = null; Log.Error(ex, "Classic genie"); }
         return false;
+    }
+
+    // ── 1.6.4: pencerenin kendi küçültme düğmesi / Win+Aşağı ──
+    // Öndeki uygulama penceresinin görüntüsü düşük maliyetle (ön plan değişince ve birkaç saniyede bir) önbelleğe alınır
+    // ve yalnızca o pencerenin Windows küçültme animasyonu kapatılır. Küçültme başlayınca Genie bu görüntüyle oynar;
+    // görüntü dock'tan geri açılışta da kullanılır.
+
+    /// <summary>Öndeki pencere: Windows'un kendi küçültme animasyonu yalnızca bu pencere için kapatılır.</summary>
+    public static void Hold(IntPtr hwnd) => SetTransitions(hwnd, true);
+
+    /// <summary>Pencere artık önde değil: animasyonu geri açılır (dock'tan Genie ile geri gelmeyi bekleyen hariç).</summary>
+    public static void Release(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return;
+        if (IsIconic(hwnd) && Cache.ContainsKey(hwnd)) return;
+        SetTransitions(hwnd, false);
+    }
+
+    /// <summary>Öndeki pencerenin son görüntüsü (arka planda alınır).</summary>
+    public static void SetFresh(IntPtr hwnd, GenieCapture capture) => _fresh = (hwnd, capture, DateTime.UtcNow);
+
+    /// <summary>Arka plan iş parçacığında görüntü; başarısızsa null.</summary>
+    public static GenieCapture? Capture(IntPtr hwnd)
+    {
+        try { return IsWindow(hwnd) && !IsIconic(hwnd) && IsWindowVisible(hwnd) ? GenieCapture.From(hwnd) : null; }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>Pencere kendi düğmesiyle küçülmeye başladı: saklanan görüntüyle simgeye Genie.</summary>
+    public static bool PlayMinimizing(IntPtr hwnd, RECT icon, DockEdge edge, IntPtr dock)
+    {
+        try
+        {
+            if (OwnMinimize.Contains(hwnd)) return false; // dock tıklaması zaten oynatıyor
+            if (_fresh is not { } f || f.Hwnd != hwnd || DateTime.UtcNow - f.At > TimeSpan.FromSeconds(30) /* MinimizeGeniePolicy.MaxAge */)
+                return Skip("minimize button", "no recent image of the window");
+            if (!Ready) return Skip("minimize button", _running is not null ? "another animation is running" : "graphics card not usable");
+            _fresh = null;
+            Remember(hwnd, f.Capture);
+            var a = new GenieAnimation(f.Capture, icon, edge, expand: false, started: null, finished: () => { }, durationMs: 520, lingerMs: 0);
+            a.Ended += () => { _running = null; if (!IsIconic(hwnd)) { Cache.Remove(hwnd); SetTransitions(hwnd, false); } };
+            _running = a;
+            if (a.Start(dock)) return true;
+            _running = null;
+            return Skip("minimize button", "overlay could not start");
+        }
+        catch (Exception ex) { _running = null; Log.Error(ex, "Classic genie"); return false; }
     }
 
     static bool Skip(string action, string why)

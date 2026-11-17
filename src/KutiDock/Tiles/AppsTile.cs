@@ -45,6 +45,10 @@ namespace KutiDock.Tiles
                 _panel.Orientation = Orientation.Vertical; _panel.HorizontalAlignment = HorizontalAlignment.Center;
                 Height = double.NaN; Width = 50 * K;
             }
+            // 1.6.4: pencerenin kendi küçültme düğmesinde de Genie (simgeye doğru)
+            MinimizeGenie.Target = TargetFor;
+            MinimizeGenie.Enabled = () => S.Settings.Animations;
+            MinimizeGenie.Start();
             MouseMove += (_, _) => Loop(true);
             MouseLeave += (_, _) => Loop(true);
         }
@@ -258,6 +262,32 @@ namespace KutiDock.Tiles
             _signature = ""; // aktif göstergesini tazele
         }
 
+        /// <summary>Pencerenin dock'taki simgesi (ekran pikseli). Simgesi henüz yoksa (dock saklıyken açılan uygulama) şeridin ortası.</summary>
+        (KutiDock.Mac.Interop.RECT, KutiDock.Mac.Core.DockEdge, IntPtr)? TargetFor(IntPtr hwnd)
+        {
+            try
+            {
+                var edge = S.Settings.Edge switch
+                {
+                    DockEdge.Alt => KutiDock.Mac.Core.DockEdge.Bottom, DockEdge.Sol => KutiDock.Mac.Core.DockEdge.Left,
+                    DockEdge.Sag => KutiDock.Mac.Core.DockEdge.Right, _ => (KutiDock.Mac.Core.DockEdge?)null,
+                };
+                if (edge == null || PresentationSource.FromVisual(this) == null) return null;
+                FrameworkElement el = _slots.FirstOrDefault(sl => sl.Outer.Tag is AppItem it && it.Windows.Contains(hwnd))?.Outer;
+                Point a, b;
+                if (el != null && PresentationSource.FromVisual(el) != null)
+                { a = el.PointToScreen(new Point(0, 0)); b = el.PointToScreen(new Point(el.ActualWidth, el.ActualHeight)); }
+                else
+                {
+                    var c = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2)); double h = 20 * K;
+                    a = new Point(c.X - h, c.Y - h); b = new Point(c.X + h, c.Y + h);
+                }
+                var r = new KutiDock.Mac.Interop.RECT((int)Math.Min(a.X, b.X), (int)Math.Min(a.Y, b.Y), (int)Math.Max(a.X, b.X), (int)Math.Max(a.Y, b.Y));
+                return (r, edge.Value, _self());
+            }
+            catch (Exception) { return null; }
+        }
+
         bool Genie(IntPtr hwnd, FrameworkElement target, bool restore)
         {
             if (!S.Settings.Animations) return false;
@@ -299,7 +329,7 @@ namespace KutiDock.Tiles
         /// <summary>Sağ tık: pencere listesi, yeni pencere, kapat.</summary>
         void Menu(AppItem it, FrameworkElement target)
         {
-            var m = new ContextMenu();
+            var m = new ContextMenu(); OutsideCloser.Attach(m);
             var fg = Native.GetForegroundWindow();
             var wins = it.Windows.Where(Native.IsWindowVisible).ToList();
             foreach (var h in wins)

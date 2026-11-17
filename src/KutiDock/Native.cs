@@ -153,17 +153,22 @@ namespace KutiDock
             var list = new List<IntPtr>();
             EnumWindows((h, _) =>
             {
-                if (h == exclude || !IsWindowVisible(h)) return true;
-                long ex = GetWindowLongPtr(h, GWL_EXSTYLE).ToInt64();
-                bool appWindow = (ex & WS_EX_APPWINDOW) != 0;
-                if (!appWindow && ((ex & WS_EX_TOOLWINDOW) != 0 || GetWindow(h, GW_OWNER) != IntPtr.Zero)) return true;
-                if (GetWindowTextLength(h) == 0) return true;
-                if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out int cloaked, 4) == 0 && cloaked != 0) return true;
-                if (ShellClasses.Contains(ClassName(h))) return true;
-                list.Add(h);
+                if (h != exclude && IsAppWindow(h)) list.Add(h);
                 return true;
             }, IntPtr.Zero);
             return list;
+        }
+
+        /// <summary>Görev çubuğunda görünecek türden bir uygulama penceresi mi.</summary>
+        public static bool IsAppWindow(IntPtr h)
+        {
+            if (h == IntPtr.Zero || !IsWindowVisible(h)) return false;
+            long ex = GetWindowLongPtr(h, GWL_EXSTYLE).ToInt64();
+            bool appWindow = (ex & WS_EX_APPWINDOW) != 0;
+            if (!appWindow && ((ex & WS_EX_TOOLWINDOW) != 0 || GetWindow(h, GW_OWNER) != IntPtr.Zero)) return false;
+            if (GetWindowTextLength(h) == 0) return false;
+            if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out int cloaked, 4) == 0 && cloaked != 0) return false;
+            return !ShellClasses.Contains(ClassName(h));
         }
 
         // ---- Paketli (Mağaza/UWP) uygulamalar: AppUserModelID ----

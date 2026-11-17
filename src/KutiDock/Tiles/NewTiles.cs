@@ -30,6 +30,7 @@ namespace KutiDock.Tiles
                 },
             };
             p.Opened += (_, _) => Anim.PopIn(p.Child, edge);
+            OutsideCloser.Attach(p); // dock odak almadığından masaüstü/başka pencere/Esc için
             return p;
         }
 
@@ -423,7 +424,7 @@ namespace KutiDock.Tiles
             ToolTip = "Ekran görüntüsü (ShareX): tıkla = bölge, sağ tık = diğer seçenekler";
             OnClick(() => Capture(ShareXCapture.Bolge));
             Ui.PressEffect(this);
-            var m = new ContextMenu();
+            var m = new ContextMenu(); OutsideCloser.Attach(m);
             void Add(string h, Action a) { var i = new MenuItem { Header = h }; i.Click += (_, _) => a(); m.Items.Add(i); }
             Add("Bölge seç", () => Capture(ShareXCapture.Bolge));
             Add("Etkin pencere", () => Capture(ShareXCapture.Pencere));

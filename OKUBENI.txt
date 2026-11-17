@@ -7,6 +7,14 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.4'TE NE DEĞİŞTİ
+- Pencerenin kendi küçültme düğmesi (ya da Win+Aşağı) da Genie ile dock'taki simgesine küçültür; dock'tan
+  tıklayınca Genie ile geri büyür. Öndeki uygulama penceresinin görüntüsü ön plan değişince ve 2,5 sn'de bir
+  arka planda alınır; Windows'un küçültme animasyonu yalnızca öndeki pencere için kapatılır (önden çekilince
+  geri açılır). Tam ekranda ve oyun penceresinde çalışmaz. Görüntü yoksa normal küçülür/açılır.
+- Cursor/Grok Bot kullanım paneli, ses, disk, optimizasyon panelleri ve sağ tık menüleri artık masaüstüne,
+  başka bir pencereye ya da ikinci monitöre tıklayınca ve Esc ile kapanır.
+
 1.6.3'TE NE DEĞİŞTİ
 - Windows görev çubuğu tamamen kapalı (varsayılan). 1.6.2'de menü çubuğunun tepsi penceresi de "Shell_TrayWnd"
   adını taşıdığı için gizleme yanlış pencereye bağlanıyordu; tam ekrandan çıkınca çubuk bir an görünüyordu.
