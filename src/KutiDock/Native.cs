@@ -186,6 +186,21 @@ namespace KutiDock
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetApplicationUserModelId(IntPtr hProcess, ref int len, StringBuilder sb);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
 
+        /// <summary>Bir kabuk nesnesinin (ör. .lnk) özellik deposundaki AppUserModelID; yoksa null.</summary>
+        public static string PropertyStoreAumid(object shellObject)
+        {
+            try
+            {
+                if (shellObject is not IPropertyStore ps) return null;
+                var key = new PROPERTYKEY { fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), pid = 5 };
+                if (ps.GetValue(ref key, out var v) != 0) return null;
+                string id = v.vt == 31 ? Marshal.PtrToStringUni(v.p) : null;
+                PropVariantClear(ref v);
+                return string.IsNullOrEmpty(id) ? null : id;
+            }
+            catch (Exception) { return null; }
+        }
+
         /// <summary>Pencerenin AppUserModelID'si: önce pencere özellik deposu, sonra (UWP çerçevesi için iç CoreWindow'un) süreci.</summary>
         public static string AppUserModelId(IntPtr h)
         {

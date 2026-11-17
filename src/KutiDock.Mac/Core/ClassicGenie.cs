@@ -75,6 +75,28 @@ internal static class ClassicGenie
         return false;
     }
 
+    /// <summary>
+    /// 1.6.6: dock'tan ilk kez açılan uygulamanın penceresi simgeden büyüyerek gelir. Pencere bu sırada saydam tutulur;
+    /// son karede <paramref name="reveal"/> çağrılır (pencere görünür olur). Oynamazsa false: çağıran hemen gösterir.
+    /// </summary>
+    public static bool PlayLaunch(IntPtr hwnd, GenieCapture capture, RECT icon, DockEdge edge, IntPtr dock, Action reveal)
+    {
+        try
+        {
+            if (!Ready) return Skip("launch", _running is not null ? "another animation is running" : "graphics card not usable");
+            SetTransitions(hwnd, true);
+            var a = new GenieAnimation(capture, icon, edge, expand: true,
+                started: null, finished: reveal, durationMs: 460, lingerMs: 120);
+            a.Ended += () => { SetTransitions(hwnd, false); _running = null; };
+            _running = a;
+            if (a.Start(dock)) return true;
+            _running = null; SetTransitions(hwnd, false);
+            return Skip("launch", "overlay could not start");
+        }
+        catch (Exception ex) { _running = null; Log.Error(ex, "Classic genie"); }
+        return false;
+    }
+
     // ── 1.6.4: pencerenin kendi küçültme düğmesi / Win+Aşağı ──
     // Öndeki uygulama penceresinin görüntüsü düşük maliyetle (ön plan değişince ve birkaç saniyede bir) önbelleğe alınır
     // ve yalnızca o pencerenin Windows küçültme animasyonu kapatılır. Küçültme başlayınca Genie bu görüntüyle oynar;

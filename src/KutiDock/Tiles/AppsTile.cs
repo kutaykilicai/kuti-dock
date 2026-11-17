@@ -128,9 +128,10 @@ namespace KutiDock.Tiles
                     {
                         var target = ShellIcons.LinkTarget(lnk);
                         if (target != null && Path.GetFileName(target).Equals("explorer.exe", StringComparison.OrdinalIgnoreCase)) target = null;
+                        var (args, linkAumid) = ShellIcons.LinkIdentity(lnk);
                         list.Add(new AppItem
                         {
-                            Key = (target ?? lnk).ToLowerInvariant(), Name = Path.GetFileNameWithoutExtension(lnk),
+                            Key = AppGrouping.PinnedKey(lnk, target, args, linkAumid), Name = Path.GetFileNameWithoutExtension(lnk),
                             Launch = lnk, IconPath = lnk, Pinned = true,
                         });
                     }
@@ -152,11 +153,14 @@ namespace KutiDock.Tiles
                 // Paketli uygulamalar (Ayarlar, Not Defteri vb.): simge ve başlatma AppUserModelID ile.
                 // Eskiden ApplicationFrameHost pencereleri simgesiz kalıp baş harf ("A") gösteriliyordu.
                 bool frame = Path.GetFileName(path).Equals("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase);
-                string aumid = frame || path.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) ? Native.AppUserModelId(h) : null;
-                string key, name, launch, icon;
-                if (aumid != null) { key = "aumid:" + aumid.ToLowerInvariant(); launch = icon = @"shell:AppsFolder\" + aumid; name = frame ? Native.WindowTitle(h) : Services.AppName(path); }
+                bool packaged = frame || path.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase);
+                // 1.6.6: her pencerenin AppUserModelID'sine bakılır: Chrome'dan kurulan uygulamalar (WhatsApp vb.) kendi simgesine bağlanır
+                string aumid = Native.AppUserModelId(h);
+                string key = AppGrouping.WindowKey(path, aumid, packaged), name, launch, icon;
+                if (key.StartsWith("crx:")) { launch = icon = @"shell:AppsFolder\" + aumid; name = Native.WindowTitle(h); }
+                else if (key.StartsWith("aumid:")) { launch = icon = @"shell:AppsFolder\" + aumid; name = frame ? Native.WindowTitle(h) : Services.AppName(path); }
                 else if (frame) continue; // kimliği çözülemeyen boş UWP çerçevesi (askıdaki uygulama) gösterilmez
-                else { key = path.ToLowerInvariant(); launch = icon = path; name = Services.AppName(path); }
+                else { launch = icon = path; name = Services.AppName(path); }
                 if (!byKey.TryGetValue(key, out var it))
                 {
                     it = new AppItem { Key = key, Name = name, Launch = launch, IconPath = icon };
@@ -244,7 +248,7 @@ namespace KutiDock.Tiles
         void Click(AppItem it, FrameworkElement target)
         {
             var alive = it.Windows.Where(Native.IsWindowVisible).ToList();
-            if (alive.Count == 0) { Launch(it); return; }
+            if (alive.Count == 0) { Launch(it, target); return; }
             var fg = _fgAtPress != IntPtr.Zero ? _fgAtPress : Native.GetForegroundWindow();
             _fgAtPress = IntPtr.Zero;
             // 1.6'daki Genie (Mac dock gibi): öndeki pencere simgeye akarak küçülür; dock'tan küçültülmüş pencere simgeden
@@ -291,6 +295,25 @@ namespace KutiDock.Tiles
             catch (Exception) { return null; }
         }
 
+        /// <summary>Simgenin ekran dikdörtgeni, kenar ve dock penceresi (Genie hedefi); dock üstteyse ya da simge görünmüyorsa null.</summary>
+        (KutiDock.Mac.Interop.RECT, KutiDock.Mac.Core.DockEdge, IntPtr)? IconTarget(FrameworkElement target)
+        {
+            try
+            {
+                var edge = S.Settings.Edge switch
+                {
+                    DockEdge.Alt => KutiDock.Mac.Core.DockEdge.Bottom, DockEdge.Sol => KutiDock.Mac.Core.DockEdge.Left,
+                    DockEdge.Sag => KutiDock.Mac.Core.DockEdge.Right, _ => (KutiDock.Mac.Core.DockEdge?)null,
+                };
+                if (edge == null || !target.IsVisible || PresentationSource.FromVisual(target) == null) return null;
+                var a = target.PointToScreen(new Point(0, 0));
+                var b = target.PointToScreen(new Point(target.ActualWidth, target.ActualHeight));
+                var r = new KutiDock.Mac.Interop.RECT((int)Math.Min(a.X, b.X), (int)Math.Min(a.Y, b.Y), (int)Math.Max(a.X, b.X), (int)Math.Max(a.Y, b.Y));
+                return (r, edge.Value, _self());
+            }
+            catch (Exception) { return null; }
+        }
+
         bool Genie(IntPtr hwnd, FrameworkElement target, bool restore)
         {
             if (!S.Settings.Animations) return false;
@@ -317,7 +340,7 @@ namespace KutiDock.Tiles
             WindowPreview.Open(it.Key, it.Windows, img(it) ?? ShellIcons.Generic, anchor, S.Settings.Edge);
         }
 
-        void Launch(AppItem it)
+        void Launch(AppItem it, FrameworkElement anchor = null)
         {
             if (it.Launch == null) return;
             if (it.Windows.Count == 0 && S.Settings.Animations)
@@ -325,6 +348,8 @@ namespace KutiDock.Tiles
                 if (!_bounce.TryGetValue(it.Key, out var b)) _bounce[it.Key] = b = new Bouncer();
                 b.Start(BounceKind.Launch, _clock.Elapsed.TotalSeconds);
                 Loop(true);
+                // 1.6.6: ilk açılışta da pencere simgeden Genie ile büyür (PWA, uygulama, dosya, klasör)
+                if (anchor != null) LaunchGenie.Expect(it.Key, () => IconTarget(anchor));
             }
             try { Process.Start(new ProcessStartInfo(it.Launch) { UseShellExecute = true }); } catch (Exception) { }
         }

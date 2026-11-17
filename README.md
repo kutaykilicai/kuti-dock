@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.5**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.6**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -27,6 +27,8 @@ C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.5**. Eski adı Kutay Dock.
 
 **Üst menü çubuğu**
 - Etkin uygulamanın adı, logoya tıklayınca Başlat menüsü.
+- Finder gibi işlevli menüler: uygulamanın kendi Win32 ya da UI Automation menüsü, yoksa Dosya/Düzen/Görüntü/Pencere/Yardım;
+  uygulama adı menüsünde gizle, diğerlerini gizle, çık. Masaüstü öndeyken Gezgin menüleri (Git, Geri Dönüşüm Kutusu).
 - Tepsi simgeleri (tıklama, çift tıklama ve sağ tık menüleri uygulamaya iletilir), sinyal gücüyle Wi-Fi, ses, pil,
   tarih ve saat. Her monitörde bir çubuk.
 
@@ -104,6 +106,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.6** Ses bölümü onarıldı, Finder tarzı işlevli menü çubuğu, Chrome PWA'ları ayrı simgede, ilk açılışta Genie.
 - **1.6.5** Apple tarzı yay animasyonları (büyütme, paneller, menüler, otomatik gizleme, Genie zamanlaması).
 - **1.6.4** Pencerenin kendi küçültme düğmesinde de Genie; paneller ve sağ tık menüleri dışarı tıklayınca ve Esc ile kapanır.
 - **1.6.3** Görev çubuğu tamamen kaldırılır, dock otomatik gizlenir, Genie daha güvenilir.

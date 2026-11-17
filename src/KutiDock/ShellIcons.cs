@@ -112,6 +112,22 @@ namespace KutiDock
             void Save(string file, bool remember); void SaveCompleted(string file); void GetCurFile(out IntPtr file);
         }
 
+        /// <summary>Kısayolun argümanları ve AppUserModelID'si (Chrome/Edge PWA kısayolları için).</summary>
+        public static (string Args, string Aumid) LinkIdentity(string lnk)
+        {
+            try
+            {
+                var link = (IShellLinkW)new CShellLink();
+                ((IPersistFile)link).Load(lnk, 0);
+                var sb = new StringBuilder(2048);
+                link.GetArguments(sb, sb.Capacity);
+                string aumid = Native.PropertyStoreAumid(link);
+                Marshal.ReleaseComObject(link);
+                return (sb.ToString(), aumid);
+            }
+            catch (Exception) { return (null, null); }
+        }
+
         /// <summary>Kısayolun hedef exe yolu (Mağaza uygulamalarında boş döner).</summary>
         public static string LinkTarget(string lnk)
         {

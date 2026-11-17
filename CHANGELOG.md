@@ -1,5 +1,19 @@
 # Değişiklik günlüğü
 
+## 1.6.6 (2026-11-17)
+- Ses bölümü onarıldı. Kök neden: Mac menü çubuğu (Gravitone) aynı CLSID için kendi `[ComImport] MMDeviceEnumerator`
+  sınıfını tanımlıyor ve açılışta önce oluşturuyordu; .NET bu COM nesnesini ilk sınıf türüyle eşlediği için dock'un
+  `new MMDeviceEnumerator()` çağrısı InvalidCastException veriyor, hata yutulduğu için aygıt listesi boş, kaydırıcı
+  etkisiz kalıyordu. Nesneler artık CoCreateInstance ile doğrudan arayüz olarak alınır; çağrılar adanmış MTA iş
+  parçacığında (`ComWorker`), hatalar hata.log'a yazılır.
+  Çıkış/giriş aygıtları, varsayılan seçimi (IPolicyConfig; olmazsa ayarlar), gerçek ses/sessiz, mikrofon sessiz,
+  klavye ses tuşlarının yansıması.
+- Finder tarzı menü çubuğu: Win32 menüsü (WM_COMMAND) → UI Automation menü çubuğu → işlevli genel menüler;
+  uygulama menüsü (hakkında, gizle, diğerlerini gizle, çık); masaüstünde Gezgin menüleri (Git, Geri Dönüşüm Kutusu).
+- Chrome PWA'ları (WhatsApp Web vb.) AppUserModelID ile ayrı gruplanır; Chrome'a tıklamak PWA penceresini etkilemez.
+- İlk açılışta Genie: dock'tan başlatılan uygulama/PWA/dosya/klasörün ilk penceresi simgeden büyüyerek açılır.
+- Testler: gruplama, menüler, kısayollar, ilk açılış Genie kuralları, boş kare denetimi, ses iş parçacığı.
+
 ## 1.6.5 (2026-11-17)
 - Apple tarzı hareket (yay/spring, kesilebilir): hover büyütme, kullanım/ses/disk/sistem panelleri, sağ tık menüleri,
   otomatik gizlenip belirme ve Başlat zıplaması. Paneller dock'tan küçük, bulanık ve saydam başlayıp hafif taşmayla

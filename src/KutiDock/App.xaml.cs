@@ -34,6 +34,7 @@ namespace KutiDock
             {
                 case KutiDock.Mac.Core.Guard.SpawnArg: Shutdown(KutiDock.Mac.Core.Guard.RunSpawner(e.Args)); return;
                 case KutiDock.Mac.Core.Guard.WatchArg: Shutdown(KutiDock.Mac.Core.Guard.RunGuard(e.Args)); return;
+                case "--ses-tani": SesTani(); Shutdown(0); return; // 1.6.6: pencere açmadan ses arayüzü denetimi
                 case "--restore-taskbar": KutiDock.Mac.Core.TaskbarState.Restore(force: true); Shutdown(0); return;
                 case KutiDock.Mac.Core.AutoStart.FallbackArg: KutiDock.Mac.Core.TaskbarState.RestoreIfOrphaned(); Shutdown(0); return;
             }
@@ -44,6 +45,7 @@ namespace KutiDock
             AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
             {
                 Log(ex.ExceptionObject as Exception); AppBar.RestoreTaskbar(); TaskbarRemover.SetEnabled(false);
+                try { LaunchGenie.RevealAll(); } catch (Exception) { } // saydam tutulan yeni pencere görünür kalsın
                 KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
             };
             AppDomain.CurrentDomain.ProcessExit += (_, _) => KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
@@ -56,7 +58,9 @@ namespace KutiDock
             AppBar.ShowAllTaskbars();
             var settings = Settings.Load(SettingsPath);
             if (!File.Exists(SettingsPath)) { try { settings.Save(SettingsPath); } catch (Exception) { } }
+            CoreAudio.Error = (w, ex) => Log(new Exception("Ses: " + w, ex));
             _services = new Services(settings);
+            KutiDock.Mac.UI.AppMenus.Decorate = m => OutsideCloser.Attach(m, DockEdge.Ust); // 1.6.6: üst çubuk menüleri yayla açılır, dışarı tıklama/Esc ile kapanır
             if (settings.MacDock) StartMac();
             else StartClassicMenuBar();
             BuildStrips();
@@ -263,6 +267,17 @@ namespace KutiDock
             AppBar.RestoreTaskbar();
             TaskbarRemover.SetEnabled(false);
             base.OnExit(e);
+        }
+
+        static void SesTani()
+        {
+            var sb = new System.Text.StringBuilder();
+            CoreAudio.Error = (w, ex) => sb.AppendLine($"{w} HATA: {ex.GetType().Name} {ex.Message}");
+            var a = new CoreAudio();
+            sb.AppendLine("apartment: " + Thread.CurrentThread.GetApartmentState());
+            var l = a.Outputs(); sb.AppendLine("aygit: " + l.Count + ", varsayilan: " + l.Count(d => d.IsDefault));
+            var r = a.Read(); sb.AppendLine("okuma: " + (r == null ? "yok" : $"{r.Value.level:0.00} sessiz={r.Value.muted}"));
+            try { File.WriteAllText(Path.Combine(Path.GetTempPath(), "kutidock-ses-tani.txt"), sb.ToString()); } catch (Exception) { }
         }
 
         static void Log(Exception ex)

@@ -257,23 +257,40 @@ namespace KutiDock.Tiles
         }
         Popup _popup;
 
-        /// <summary>Ses çıkış aygıtı listesi; tıklanan aygıt varsayılan olur (tüm roller).</summary>
+        /// <summary>Ses çıkış ve giriş (mikrofon) aygıtları; tıklanan aygıt varsayılan olur (tüm roller). Seçilemezse Ses ayarları açılır.</summary>
         void ShowDevices()
         {
             var p = new StackPanel();
-            p.Children.Add(Ui.Text("Ses çıkışı", 15, Brushes.White, FontWeights.SemiBold));
-            var list = S.Audio.Outputs();
-            if (list.Count == 0) p.Children.Add(Ui.Text("Aygıt bulunamadı", 12, Theme.B("#99F5F5F7")));
-            foreach (var d in list)
+            void Section(string title, System.Collections.Generic.List<CoreAudio.Device> list, bool input)
             {
-                var row = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand };
-                var mark = Ui.Text(d.IsDefault ? "✓" : "", 12, Theme.Accent, FontWeights.SemiBold); mark.Width = 18;
-                DockPanel.SetDock(mark, Dock.Left); row.Children.Add(mark);
-                row.Children.Add(Ui.Text(d.Name, 12, Brushes.White, d.IsDefault ? FontWeights.SemiBold : FontWeights.Normal, 280));
-                var id = d.Id;
-                row.MouseLeftButtonUp += (_, e) => { S.Audio.SetDefault(id); _popup.IsOpen = false; Refresh(); e.Handled = true; };
-                p.Children.Add(row);
+                var head = new DockPanel { Margin = new Thickness(0, p.Children.Count == 0 ? 0 : 14, 0, 0) };
+                if (input && S.Audio.Read(true) is { } mic)
+                {
+                    var mute = Pop.Link(mic.muted ? "Mikrofonu aç" : "Mikrofonu sessize al", () => { S.Audio.SetMute(!mic.muted, true); _popup.IsOpen = false; });
+                    mute.Margin = new Thickness(8, 2, 0, 0);
+                    DockPanel.SetDock(mute, Dock.Right); head.Children.Add(mute);
+                }
+                head.Children.Add(Ui.Text(title, 15, Brushes.White, FontWeights.SemiBold));
+                p.Children.Add(head);
+                if (list.Count == 0) p.Children.Add(Ui.Text("Aygıt bulunamadı", 12, Theme.B("#99F5F5F7")));
+                foreach (var d in list)
+                {
+                    var row = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+                    var mark = Ui.Text(d.IsDefault ? "✓" : "", 12, Theme.Accent, FontWeights.SemiBold); mark.Width = 18;
+                    DockPanel.SetDock(mark, Dock.Left); row.Children.Add(mark);
+                    row.Children.Add(Ui.Text(d.Name, 12, Brushes.White, d.IsDefault ? FontWeights.SemiBold : FontWeights.Normal, 280));
+                    var id = d.Id;
+                    row.MouseLeftButtonUp += (_, e) =>
+                    {
+                        _popup.IsOpen = false;
+                        if (!S.Audio.SetDefault(id)) Run("ms-settings:sound"); // arayüz kullanılamazsa Windows ses ayarları
+                        Refresh(); e.Handled = true;
+                    };
+                    p.Children.Add(row);
+                }
             }
+            Section("Ses çıkışı", S.Audio.Outputs(), false);
+            Section("Ses girişi", S.Audio.Inputs(), true);
             p.Children.Add(Pop.Link("Ses ayarları", () => { _popup.IsOpen = false; Run("ms-settings:sound"); }));
             if (_popup != null) _popup.IsOpen = false;
             _popup = Pop.Make(this, p, S.Settings.Edge);

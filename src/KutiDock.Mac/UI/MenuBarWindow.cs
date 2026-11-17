@@ -30,6 +30,10 @@ internal sealed class MenuBarWindow : Window
     readonly Grid _root = new() { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) }; // alpha 1: clickable
     readonly Border _logo;
     readonly TextBlock _appName;
+    readonly Border _appButton;
+    readonly StackPanel _menuPanel = new() { Orientation = Orientation.Horizontal };
+    readonly List<TextBlock> _menuTexts = [];
+    AppMenus? _menus;
     readonly TrayIconsPanel? _tray;
     readonly Border _status;
     readonly TextBlock _wifi, _wifiBack, _volume, _battery;
@@ -79,8 +83,11 @@ internal sealed class MenuBarWindow : Window
         _logo.MouseRightButtonUp += (_, _) => StartMenu.ShowQuickLinkMenu();
 
         _appName = Text("", 13, FontWeights.Bold);
-        _appName.Margin = new Thickness(6, 0, 0, 0);
         _appName.VerticalAlignment = VerticalAlignment.Center;
+        // 1.6.6: uygulama adı macOS'taki gibi uygulama menüsünü açar; yanında işlevli menü başlıkları
+        _appButton = Clickable(_appName, 7);
+        _appButton.Margin = new Thickness(2, 2, 0, 2);
+        _appButton.MouseLeftButtonUp += (_, _) => _menus?.OpenAppMenu(_appButton);
 
         // One tray service per session: it lives in the primary monitor's bar.
         if (primary) _tray = new TrayIconsPanel { Margin = new Thickness(0, 2, 4, 2) };
@@ -109,7 +116,8 @@ internal sealed class MenuBarWindow : Window
 
         var left = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
         left.Children.Add(_logo);
-        left.Children.Add(_appName);
+        left.Children.Add(_appButton);
+        left.Children.Add(_menuPanel);
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -277,6 +285,35 @@ internal sealed class MenuBarWindow : Window
     // ───────────────────────── Content ─────────────────────────
 
     public void ShowAppName(string name) => _appName.Text = name;
+
+    /// <summary>Öndeki uygulamanın menü başlıkları (Win32 menüsü, UI Automation ya da genel menüler).</summary>
+    public void ShowMenus(AppMenus menus)
+    {
+        if (_menus != null) _menus.TitlesChanged -= Rebuild;
+        _menus = menus;
+        menus.TitlesChanged += Rebuild;
+        Rebuild();
+    }
+
+    void Rebuild()
+    {
+        foreach (var t in _menuTexts) _texts.Remove(t);
+        _menuTexts.Clear();
+        _menuPanel.Children.Clear();
+        if (_menus == null) return;
+        var fg = _appName.Foreground;
+        for (int i = 0; i < _menus.Titles.Count && i < 14; i++)
+        {
+            var t = Text(_menus.Titles[i], 13, FontWeights.Normal);
+            t.Foreground = fg;
+            t.VerticalAlignment = VerticalAlignment.Center;
+            _menuTexts.Add(t);
+            var b = Clickable(t, 7);
+            int index = i; var menus = _menus;
+            b.MouseLeftButtonUp += (_, _) => menus.Open(index, b);
+            _menuPanel.Children.Add(b);
+        }
+    }
 
     public void ShowClock(string text, string tip)
     {

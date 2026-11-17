@@ -7,6 +7,25 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.6'DA NE DEĞİŞTİ
+- Ses: aygıt listesi boş, kaydırıcı etkisizdi. Kök neden: üst menü çubuğu (Gravitone) ses aygıtı
+  sayıcısı için aynı COM kimliğiyle kendi sınıfını tanımlıyor ve açılışta önce oluşturuyordu; .NET nesneyi o sınıfla
+  eşlediğinden dock'un kendi sayıcısı "geçersiz dönüşüm" hatası veriyor, hata sessizce yutuluyordu. Artık nesne doğrudan
+  CoCreateInstance ile alınır; tüm Core Audio işleri ayrı bir MTA iş parçacığında, hatalar hata.log'a yazılır. Çıkış ve giriş (mikrofon)
+  aygıtları listelenir, varsayılan işaretlidir; seçince varsayılan değişir (olmazsa Windows ses ayarları açılır).
+  Kaydırıcı, sessiz ve mikrofonu sessize alma gerçek sesi değiştirir; klavye ses tuşları dock'a yansır.
+- Üst çubuk (Finder gibi): uygulama adının yanında işlevli menüler. Klasik Win32 menüsü olan uygulamalarda
+  uygulamanın kendi menüleri (komut doğrudan uygulamaya gider), UI Automation menü çubuğu olanlarda o menüler,
+  diğerlerinde (Chrome, Electron, Mağaza uygulamaları, Gezgin) Dosya/Düzen/Görüntü/Pencere/Yardım genel menüleri
+  kısayolu öndeki pencereye gönderir. Uygulama adına tıklayınca: hakkında (dosya konumu), gizle, diğerlerini gizle,
+  çık. Masaüstü öndeyken Gezgin menüleri: yeni pencere, Git (Masaüstü, Belgeler, İndirilenler...), Geri Dönüşüm Kutusu.
+  Menüler yayla açılır, dışarı tıklayınca ya da Esc ile kapanır.
+- Chrome'dan kurulan uygulamalar (WhatsApp Web vb.) artık kendi simgesine bağlı: Chrome'a tıklamak WhatsApp'ı
+  etkilemez. Pencereler AppUserModelID (Chrome uygulama kimliği) ile gruplanır; önizleme ve Genie de aynı gruplamayı kullanır.
+- İlk açılışta da Genie: dock'tan çalışmıyorken açılan uygulama, PWA, dosya ya da klasörün ilk penceresi simgeden
+  büyüyerek açılır. Pencere ilk dolu karesi çizilene kadar saydam tutulur (siyah/boş kare yok); 5 sn'de pencere
+  gelmezse ya da kare çizilmezse normal açılır. Tam ekranda, oyunlarda ve UAC'de çalışmaz.
+
 1.6.5'TE NE DEĞİŞTİ
 - Apple tarzı hareket: hover büyütme, paneller, sağ tık menüleri, otomatik gizleme ve Başlat zıplaması artık yay
   (spring) ile; yarıda kesilince olduğu yerden döner. Paneller dock'tan küçük, bulanık ve saydam başlayıp

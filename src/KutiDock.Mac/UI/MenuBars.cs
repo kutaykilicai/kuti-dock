@@ -28,6 +28,7 @@ internal sealed class MenuBars : IDisposable
     readonly WinEventProc _winEventProc; // kept alive: native code calls it
     readonly Dictionary<string, string> _nameCache = [];
     readonly List<MenuBarWindow> _bars = [];
+    AppMenus? _menus; // 1.6.6: öndeki uygulamanın menüleri
     IntPtr _foregroundHook;
     bool _allDisplays;
     string _barsKey = "";
@@ -88,6 +89,7 @@ internal sealed class MenuBars : IDisposable
             _bars.Add(bar);
             bar.Show();
             bar.ShowStatus(_status);
+            if (_menus != null) bar.ShowMenus(_menus);
         }
         Log.Info($"Menu bar on {_bars.Count} displays");
     }
@@ -174,6 +176,17 @@ internal sealed class MenuBars : IDisposable
                     _nameCache[key] = name = DockItem.ResolveName(identity, process);
                 }
             }
+        }
+        bool desktop = className is "Progman" or "WorkerW";
+        var target = desktop ? IntPtr.Zero : root;
+        if (_menus == null || _menus.Target != target || _menus.AppName != name)
+        {
+            try
+            {
+                _menus = new AppMenus(target, name, className, desktop);
+                foreach (var bar in _bars) bar.ShowMenus(_menus);
+            }
+            catch (Exception ex) { Log.Error(ex, "App menus"); }
         }
         if (name == AppName) return;
         AppName = name;
