@@ -184,9 +184,7 @@ namespace KutiDock.Tiles
             var b = _anchor.PointToScreen(new Point(_anchor.ActualWidth, _anchor.ActualHeight)); // kompakt görünümde ölçekli boyut
             var dpi = VisualTreeHelper.GetDpi(this);
             double ax = a.X / dpi.DpiScaleX, ay = a.Y / dpi.DpiScaleY, aw = (b.X - a.X) / dpi.DpiScaleX, ah = (b.Y - a.Y) / dpi.DpiScaleY;
-            var wa = SystemParameters.VirtualScreenWidth > 0
-                ? new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight)
-                : SystemParameters.WorkArea;
+            var wa = Native.WorkAreaDipAt((a.X + b.X) / 2, (a.Y + b.Y) / 2, dpi.DpiScaleX, dpi.DpiScaleY); // 1.6.8: dock'un ekranı
             (Left, Top) = DockLayout.Popup(_edge, ax, ay, aw, ah, ActualWidth, ActualHeight, 10, wa.X, wa.Y, wa.Width, wa.Height);
         }
 

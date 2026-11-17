@@ -40,6 +40,10 @@ public sealed class Settings
     public bool MacDock { get; set; } = false;
     /// <summary>1.6.3: dock ekran kenarında saklanır, fare kenara gelince belirir.</summary>
     public bool AutoHideDock { get; set; } = true;
+    /// <summary>1.6.8: saklı dock fareyi takip eder (hangi monitörün kenarına gidilirse orada belirir).</summary>
+    public bool FollowMouse { get; set; } = true;
+    /// <summary>1.6.8: dock yalnızca ana ekranda.</summary>
+    public bool PrimaryOnly { get; set; } = false;
     /// <summary>macOS büyütmesi (imleç çevresindeki simgeler büyür).</summary>
     public bool Magnification { get; set; } = true;
     /// <summary>Açılış sıçraması, dock/panel açılma-kapanma animasyonları.</summary>

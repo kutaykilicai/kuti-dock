@@ -250,12 +250,18 @@ namespace KutiDock
         /// Ön plandaki pencere DOCK'UN monitörünü tam ekran kaplıyor mu (oyun, tam ekran video)? Başka monitördeki
         /// pencereler, büyütülmüş (maximize) pencereler ve masaüstü/kabuk sınıfları sayılmaz. Karar Core'daki FullscreenRule'da.
         /// </summary>
-        public static bool ForegroundIsFullscreen(IntPtr self)
+        public static bool ForegroundIsFullscreen(IntPtr self) =>
+            self != IntPtr.Zero && GetForegroundWindow() != self && ForegroundIsFullscreenOn(MonitorFromWindow(self, 2));
+
+        /// <summary>1.6.8: ön plandaki pencere verilen monitörü tam ekran kaplıyor mu (dock fareyi takip ederken monitör başına).</summary>
+        public static bool ForegroundIsFullscreenOn(IntPtr monitor)
         {
             IntPtr fg = GetForegroundWindow();
-            if (fg == IntPtr.Zero || fg == self || self == IntPtr.Zero) return false;
+            if (fg == IntPtr.Zero || monitor == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(fg, out uint fgPid);
+            if (fgPid == (uint)Environment.ProcessId) return false; // dock'un kendi pencereleri
             if (!GetWindowRect(fg, out var r)) return false;
-            if (!MonitorRect(fg, out var fgMon) || !MonitorRect(self, out var dockMon)) return false;
+            if (!MonitorRect(fg, out var fgMon) || !MonitorBox(monitor, out var dockMon, out _)) return false;
             bool caption = (GetWindowLongPtr(fg, GWL_STYLE).ToInt64() & WS_CAPTION) == WS_CAPTION;
             bool geometry = KutiDock.Core.FullscreenRule.HidesDock(Box(r), fgMon, dockMon, IsZoomed(fg), ClassName(fg), caption);
             int quns = SHQueryUserNotificationState(out var q) == 0 ? q : 0;
@@ -266,6 +272,37 @@ namespace KutiDock
         const long WS_CAPTION = 0x00C00000;
 
         static KutiDock.Core.Box Box(RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);
+
+        // ── 1.6.8: dock fareyi takip eder (Per-Monitor V2) ──
+        [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
+        [DllImport("shcore.dll")] static extern int GetDpiForMonitor(IntPtr mon, int type, out uint dpiX, out uint dpiY);
+        public const uint MONITOR_DEFAULTTONULL = 0, MONITOR_DEFAULTTOPRIMARY = 1, MONITOR_DEFAULTTONEAREST = 2;
+
+        public static IntPtr MonitorAt(int x, int y, uint flags) => MonitorFromPoint(new POINT { X = x, Y = y }, flags);
+        public static IntPtr PrimaryMonitor() => MonitorAt(0, 0, MONITOR_DEFAULTTOPRIMARY);
+
+        /// <summary>Monitörün tamamı ve çalışma alanı (piksel).</summary>
+        public static bool MonitorBox(IntPtr mon, out KutiDock.Core.Box monitor, out KutiDock.Core.Box work)
+        {
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            bool ok = mon != IntPtr.Zero && GetMonitorInfo(mon, ref mi);
+            monitor = Box(mi.rcMonitor); work = Box(mi.rcWork);
+            return ok;
+        }
+
+        /// <summary>1.6.8: verilen ekran noktasının (piksel) monitörünün çalışma alanı, DIP'e çevrilmiş (paneller dock'un ekranında açılsın).</summary>
+        public static System.Windows.Rect WorkAreaDipAt(double xPx, double yPx, double scaleX, double scaleY)
+        {
+            if (!MonitorBox(MonitorAt((int)xPx, (int)yPx, MONITOR_DEFAULTTONEAREST), out _, out var w)) return System.Windows.SystemParameters.WorkArea;
+            return new System.Windows.Rect(w.Left / scaleX, w.Top / scaleY, (w.Right - w.Left) / scaleX, (w.Bottom - w.Top) / scaleY);
+        }
+
+        /// <summary>Monitörün etkin DPI'si (MDT_EFFECTIVE_DPI); okunamazsa 96.</summary>
+        public static uint MonitorDpi(IntPtr mon)
+        {
+            try { if (mon != IntPtr.Zero && GetDpiForMonitor(mon, 0, out var x, out _) == 0 && x > 0) return x; } catch (Exception) { }
+            return 96;
+        }
 
         static bool MonitorRect(IntPtr h, out KutiDock.Core.Box box)
         {

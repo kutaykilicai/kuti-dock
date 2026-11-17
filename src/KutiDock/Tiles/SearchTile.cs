@@ -264,7 +264,7 @@ namespace KutiDock.Tiles
             var a = _anchor.PointToScreen(new Point(0, 0));
             var b = _anchor.PointToScreen(new Point(_anchor.ActualWidth, _anchor.ActualHeight));
             var dpi = VisualTreeHelper.GetDpi(this);
-            var wa = SystemParameters.WorkArea;
+            var wa = Native.WorkAreaDipAt((a.X + b.X) / 2, (a.Y + b.Y) / 2, dpi.DpiScaleX, dpi.DpiScaleY); // 1.6.8: dock'un ekranı
             (Left, Top) = DockLayout.Popup(_edge, a.X / dpi.DpiScaleX, a.Y / dpi.DpiScaleY, (b.X - a.X) / dpi.DpiScaleX, (b.Y - a.Y) / dpi.DpiScaleY,
                 ActualWidth, ActualHeight, 10, wa.X, wa.Y, wa.Width, wa.Height);
         }

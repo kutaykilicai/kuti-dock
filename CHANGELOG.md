@@ -1,5 +1,12 @@
 # Değişiklik günlüğü
 
+## 1.6.8 (2026-11-17)
+- Dock fareyi takip eder (çoklu ekran): saklı dock, fare hangi monitörün dış dock kenarına giderse orada belirir
+  (MonitorFromPoint, GetDpiForMonitor, Per-Monitor V2 piksel yerleşimi). Ekranlar arası ortak kenar tetiklemez
+  (`DockMonitors.AtOuterEdge`). Tam ekran/oyun monitör başına (`ForegroundIsFullscreenOn`). Arama paneli ve
+  önizleme dock'un ekranında. Ayarlar: "Dock fareyi takip etsin" (varsayılan açık), "Yalnızca ana ekran".
+- Testler: Kasa'nın gerçek ekran düzeni, ortak kenar, monitör seçimi, DPI dönüşümü, varsayılan ayarlar.
+
 ## 1.6.7 (2026-11-17)
 - WhatsApp Web PWA dock'tan küçültülemiyordu. Kök neden: Chrome pencere AUMID'sinde uygulama kimliğini ortadan kısaltıyor
   (`--app-id=hnpfjngllnobngcgfapefoaidbinmjnm` → `Chrome._crx_hnpfjngllnfapefoaidbinmjnm`); anahtar tutmadığı için pencere

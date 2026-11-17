@@ -36,7 +36,11 @@ namespace KutiDock
         bool AutoHideOn => _s.Settings.AutoHideDock && _anchor == StripAnchor.Kenar;
         // Tam ekran 250 ms'de bir yoklanır: video/oyun ≈0,5 sn'de gizler (2 gözlem), dock 2 sn sonra geri gelir (8 gözlem).
         readonly DispatcherTimer _fsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
-        readonly Debounce _fullscreen = new(2, 8);
+        Debounce _fullscreen = new(2, 8);
+        // 1.6.8: dock'un bulunduğu monitör (saklıyken fareyi takip eder); Zero: ana ekran
+        IntPtr _mon;
+        bool FollowOn => AutoHideOn;
+        IntPtr DockMonitor => FollowOn && !_s.Settings.PrimaryOnly && _mon != IntPtr.Zero ? _mon : Native.PrimaryMonitor();
 
         readonly List<string> _only;     // null: ayardaki tüm widget'lar
         readonly StripAnchor _anchor;
@@ -73,6 +77,8 @@ namespace KutiDock
                 _appBar = new AppBar(_hwnd);
             };
             SizeChanged += (_, _) => Place();
+            // Per-Monitor V2: başka DPI'lı ekrana geçince WPF pencereyi yeniden boyutlar; yer, yeni ölçekle tazelenir
+            DpiChanged += (_, _) => Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded);
             Build();
             _timer.Tick += (_, _) => Tick();
             _timer.Start();
@@ -222,6 +228,25 @@ namespace KutiDock
             var set = _s.Settings; double k = set.Scale, margin = 8;
             double w = ActualWidth, h = ActualHeight;
             var dpi = VisualTreeHelper.GetDpi(this);
+            if (FollowOn && _anchor == StripAnchor.Kenar)
+            {
+                // 1.6.8: saklı dock, bulunduğu monitörün çalışma alanında (piksel, o monitörün DPI'siyle)
+                _appBar.Remove();
+                var mon = DockMonitor;
+                if (Native.MonitorBox(mon, out _, out var work))
+                {
+                    uint md = Native.MonitorDpi(mon);
+                    int wpx = DockMonitors.ToPixels(w, md), hpx = DockMonitors.ToPixels(h, md), mpx = DockMonitors.ToPixels(margin, md);
+                    var (px, py) = DockLayout.Position(set.Edge, work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top, wpx, hpx, mpx);
+                    Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)Math.Round(px), (int)Math.Round(py), 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+                    // Bölge pencerenin şu anki gerçek boyutuyla (DPI değişimi henüz işlenmediyse eski ölçek); DpiChanged sonrası tazelenir
+                    int rpx = (int)Math.Round(32 * k * dpi.DpiScaleX);
+                    int aw = Native.GetWindowRect(_hwnd, out var wr) ? wr.Right - wr.Left : (int)Math.Round(w * dpi.DpiScaleX);
+                    int ah = wr.Bottom - wr.Top > 0 ? wr.Bottom - wr.Top : (int)Math.Round(h * dpi.DpiScaleY);
+                    Native.SetWindowRgn(_hwnd, Native.CreateRoundRectRgn(0, 0, aw + 1, ah + 1, rpx, rpx), true);
+                    return;
+                }
+            }
             bool top = set.Edge == DockEdge.Ust;
             // Yer ayırma yalnızca yatay (Üst/Alt) dock için; Sol/Sağ her zaman yüzer.
             bool reserve = set.ReserveSpace && !DockLayout.Vertical(set.Edge) && _anchor == StripAnchor.Kenar && !AutoHideOn;
@@ -283,16 +308,39 @@ namespace KutiDock
                 if (_autoHidden) { _autoHidden = false; UpdateVisibility(); }
                 return;
             }
-            if (_hwnd == IntPtr.Zero || _hiddenForFullscreen || _userHidden || !Native.GetCursorPos(out var p)) return;
-            var mi = new Native.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<Native.MONITORINFO>() };
-            if (!Native.GetMonitorInfo(Native.MonitorFromWindow(_hwnd, 2), ref mi)) return;
-            var mon = new Box(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom);
+            if (_hwnd == IntPtr.Zero || _userHidden || !Native.GetCursorPos(out var p)) return;
+            var edge = _s.Settings.Edge;
+            static bool OnAny(int x, int y) => Native.MonitorAt(x, y, Native.MONITOR_DEFAULTTONULL) != IntPtr.Zero;
+            // 1.6.8: fare başka monitörün dış kenarına gelince dock oraya taşınır (o monitörde tam ekran yoksa)
+            var cursorMon = Native.MonitorAt(p.X, p.Y, Native.MONITOR_DEFAULTTONEAREST);
+            var current = DockMonitor;
+            if (cursorMon != current && Native.MonitorBox(cursorMon, out var cm, out _))
+            {
+                bool outer = DockMonitors.AtOuterEdge(edge, p.X, p.Y, cm, OnAny);
+                bool fsThere = outer && _s.Settings.HideOnFullscreen && Native.ForegroundIsFullscreenOn(cursorMon);
+                var chosen = DockMonitors.Choose((long)current, (long)cursorMon, (long)Native.PrimaryMonitor(), _s.Settings.FollowMouse,
+                    _s.Settings.PrimaryOnly, outer, fsThere);
+                if (chosen == (long)cursorMon) MoveTo(cursorMon);
+            }
+            if (_hiddenForFullscreen) return;
+            if (!Native.MonitorBox(DockMonitor, out var mon, out _)) return;
             bool over = IsVisible && Native.GetWindowRect(_hwnd, out var r) && new Box(r.Left, r.Top, r.Right, r.Bottom).Contains(p.X, p.Y, 12);
-            if (_auto.Update(AutoHide.AtEdge(_s.Settings.Edge, p.X, p.Y, mon), over, OwnPopupOpen(), DateTime.UtcNow, TimeSpan.FromMilliseconds(600)))
+            if (_auto.Update(DockMonitors.AtOuterEdge(edge, p.X, p.Y, mon, OnAny), over, OwnPopupOpen(), DateTime.UtcNow, TimeSpan.FromMilliseconds(600)))
             {
                 _autoHidden = !_auto.Shown;
                 UpdateVisibility();
             }
+        }
+
+        /// <summary>1.6.8: dock'u başka monitöre taşır: açıksa hemen saklanır, yeni monitörde kenardan kayarak belirir.</summary>
+        void MoveTo(IntPtr monitor)
+        {
+            if (OwnPopupOpen()) return; // açık panel/menü varken taşınmaz
+            _mon = monitor;
+            _fullscreen = new Debounce(2, 8); _hiddenForFullscreen = false; // tam ekran durumu yeni monitör için yeniden ölçülür
+            if (IsVisible) { _hiding = false; Hide(); }
+            _auto.Reset(); _autoHidden = true;
+            Place();
         }
 
         /// <summary>Dock'un açtığı menü, açılır panel, önizleme ya da arama paneli açıkken dock saklanmaz.</summary>

@@ -7,6 +7,13 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.8'DE NE DEĞİŞTİ
+- Dock fareyi takip eder: saklı dock, fare hangi ekranın alt (dock) kenarına giderse o ekranda belirir. İki ekranın
+  ortak kenarı tetiklemez. Yerleşim her ekranın kendi ölçeğiyle (Per-Monitor V2: %115 ana ekran, %100 yan ekran).
+  Tam ekran/oyun olan ekranda dock tetiklenmez, öbür ekranda tetiklenir. Arama paneli ve pencere önizlemesi dock'un
+  bulunduğu ekranda açılır; pencere listesi tüm ekranlardaki pencereleri gösterir. Ayarlar > Davranış: "Dock fareyi
+  takip etsin" (varsayılan açık) ve "Yalnızca ana ekran". Takip yalnızca dock kenarda saklanırken çalışır.
+
 1.6.7'DA NE DEĞİŞTİ
 - WhatsApp Web (Chrome uygulaması) dock'tan küçültülemiyordu. Kök neden: Chrome pencerenin AppUserModelID'sinde uygulama
   kimliğini ortadan kısaltıyor (kısayolda 32 karakter, pencerede 26); kimlikler tutmadığı için pencere sabitlenmiş simgeye

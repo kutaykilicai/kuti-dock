@@ -211,3 +211,72 @@ public class V167Tests
         Assert.False(LaunchGeniePolicy.IsUac("Chrome_WidgetWin_1", "Grok Bot"));
     }
 }
+
+public class DockMonitorsTests
+{
+    // Kasa düzeni: ana LG 2560x1440 (%115), sağında 24" 1920x1080 (alt kenarları farklı yükseklikte)
+    static readonly Box Lg = new(0, 0, 2560, 1440), Side = new(2560, 0, 4480, 1080);
+    static bool OnAny(int x, int y) => Lg.Contains(x, y) || Side.Contains(x, y);
+
+    [Fact]
+    public void BottomEdge_OfEachMonitor_Triggers()
+    {
+        Assert.True(DockMonitors.AtOuterEdge(DockEdge.Alt, 1200, 1439, Lg, OnAny));
+        Assert.True(DockMonitors.AtOuterEdge(DockEdge.Alt, 3500, 1079, Side, OnAny));
+        Assert.False(DockMonitors.AtOuterEdge(DockEdge.Alt, 3500, 900, Side, OnAny));
+    }
+
+    [Fact]
+    public void SharedEdgeBetweenMonitors_DoesNotTrigger()
+    {
+        // Sağdaki ekranın sol kenarı ana ekranla ortak: sol dock orada tetiklenmez, ana ekranın sağ kenarı da
+        Assert.False(DockMonitors.AtOuterEdge(DockEdge.Sol, 2560, 500, Side, OnAny));
+        Assert.False(DockMonitors.AtOuterEdge(DockEdge.Sag, 2559, 500, Lg, OnAny));
+        // Alt alta dizilmiş ekranlar: üstteki ekranın alt kenarı ortak
+        var top = new Box(0, -1080, 1920, 0);
+        bool Stack(int x, int y) => Lg.Contains(x, y) || top.Contains(x, y);
+        Assert.False(DockMonitors.AtOuterEdge(DockEdge.Alt, 500, -1, top, Stack));
+        Assert.True(DockMonitors.AtOuterEdge(DockEdge.Alt, 500, 1439, Lg, Stack));
+    }
+
+    [Fact]
+    public void Choose_FollowsPrimaryOnlyAndFullscreen()
+    {
+        const long A = 1, B = 2;
+        Assert.Equal(B, DockMonitors.Choose(A, B, A, follow: true, primaryOnly: false, cursorAtOuterEdge: true, fullscreenOnCursorMonitor: false));
+        Assert.Equal(A, DockMonitors.Choose(A, B, A, true, false, true, fullscreenOnCursorMonitor: true));  // o ekranda oyun/tam ekran
+        Assert.Equal(A, DockMonitors.Choose(A, B, A, true, false, cursorAtOuterEdge: false, false));       // kenarda değil
+        Assert.Equal(A, DockMonitors.Choose(A, B, A, follow: false, false, true, false));                  // takip kapalı
+        Assert.Equal(A, DockMonitors.Choose(B, B, A, true, primaryOnly: true, true, false));               // yalnızca ana ekran
+        Assert.Equal(A, DockMonitors.Choose(B, A, A, true, false, true, false));                           // geri ana ekrana
+    }
+
+    [Fact]
+    public void KasaRealLayout_SecondScreenOnLeftLower()
+    {
+        // Kasa'dan okunan: DISPLAY1 0,0 2560x1440 (ana), DISPLAY2 -1920,272 1920x1080
+        var main = new Box(0, 0, 2560, 1440); var left = new Box(-1920, 272, 0, 1352);
+        bool Any(int x, int y) => main.Contains(x, y) || left.Contains(x, y);
+        Assert.True(DockMonitors.AtOuterEdge(DockEdge.Alt, -900, 1351, left, Any));
+        Assert.True(DockMonitors.AtOuterEdge(DockEdge.Alt, 900, 1439, main, Any));
+        Assert.False(DockMonitors.AtOuterEdge(DockEdge.Sag, -1, 800, left, Any)); // ortak kenar
+        Assert.False(DockMonitors.AtOuterEdge(DockEdge.Sol, 0, 800, main, Any));
+        Assert.True(DockMonitors.AtOuterEdge(DockEdge.Sol, 0, 100, main, Any));   // ikinci ekranın üstünde kalan kısım dış kenar
+    }
+
+    [Fact]
+    public void PerMonitorDpi_Pixels()
+    {
+        Assert.Equal(115, DockMonitors.ToPixels(100, 110));   // %115 ≈ 110 dpi
+        Assert.Equal(100, DockMonitors.ToPixels(100, 96));
+        Assert.Equal(150, DockMonitors.ToPixels(100, 144));
+    }
+
+    [Fact]
+    public void Settings_DefaultFollowOn()
+    {
+        var s = new Settings();
+        Assert.True(s.FollowMouse);
+        Assert.False(s.PrimaryOnly);
+    }
+}
