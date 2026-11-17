@@ -277,7 +277,8 @@ internal sealed class GenieRenderer
                 WaitForSingleObject(frameReady, 100);
                 frames++;
                 double t = Math.Min(1, clock.Elapsed.TotalMilliseconds / job.DurationMs);
-                Draw(job, job.Expand ? 1 - t : t, renderTarget, area);
+                double e = global::KutiDock.Core.AppleMotion.Genie(t, job.Expand); // 1.6.5: Apple zamanlaması
+                Draw(job, job.Expand ? 1 - e : e, renderTarget, area);
                 swapChain.Present(1, PresentFlags.None); // waits for the next refresh
                 if (t >= 1) break;
             }

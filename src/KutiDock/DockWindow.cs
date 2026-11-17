@@ -85,7 +85,7 @@ namespace KutiDock
 
         ContextMenu MakeMenu()
         {
-            var m = new ContextMenu(); Tiles.OutsideCloser.Attach(m);
+            var m = new ContextMenu(); Tiles.OutsideCloser.Attach(m, _s.Settings.Edge);
             void Add(string h, Action a) { var i = new MenuItem { Header = h }; i.Click += (_, _) => a(); m.Items.Add(i); }
             Add("Ayarlar…", _openSettings);
             Add("Widget'lar…", _openSettings);

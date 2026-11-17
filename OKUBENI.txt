@@ -7,6 +7,11 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.5'TE NE DEĞİŞTİ
+- Apple tarzı hareket: hover büyütme, paneller, sağ tık menüleri, otomatik gizleme ve Başlat zıplaması artık yay
+  (spring) ile; yarıda kesilince olduğu yerden döner. Paneller dock'tan küçük, bulanık ve saydam başlayıp
+  netleşerek açılır, kısa ve taşmasız kapanır. Genie'nin zamanlaması yumuşatıldı. Ayrıntı: docs/APPLE-HAREKET.md
+
 1.6.4'TE NE DEĞİŞTİ
 - Pencerenin kendi küçültme düğmesi (ya da Win+Aşağı) da Genie ile dock'taki simgesine küçültür; dock'tan
   tıklayınca Genie ile geri büyür. Öndeki uygulama penceresinin görüntüsü ön plan değişince ve 2,5 sn'de bir

@@ -24,7 +24,7 @@ namespace KutiDock.Tiles
         string _signature = "";
 
         // macOS büyütmesi ve açılış sıçraması (Gravitone'dan uyarlandı, MIT; bkz. Core/Motion.cs)
-        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public Image Img; public string Key; public double Cur = 1; }
+        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public Image Img; public string Key; public double Cur = 1, Vel; }
         ZoomLayer _zoom;   // büyüyen simgeler dock'un üstünde buraya çizilir (kesilmez, şerit zıplamaz)
         readonly List<Slot> _slots = new();
         readonly Dictionary<string, Bouncer> _bounce = new();
@@ -82,7 +82,10 @@ namespace KutiDock.Tiles
                     var c = sl.Outer.TranslatePoint(new Point(sl.Outer.ActualWidth / 2, sl.Outer.ActualHeight / 2), _panel); // yerleşim konumu: büyütmeden etkilenmez
                     target = Magnify.Scale(vertical ? m.Y - c.Y : m.X - c.X, icon, max, 1);
                 }
-                sl.Cur = Magnify.Approach(sl.Cur, target, dt, target > sl.Cur ? Magnify.TauGrow : Magnify.TauShrink);
+                // 1.6.5: yay (Apple): imleç hızla gezinse de hız korunur, büyütme kopmadan yeni hedefe akar
+                (sl.Cur, sl.Vel) = Spring.Step(sl.Cur, sl.Vel, target, dt, target > sl.Cur ? AppleMotion.MagnifyGrow : AppleMotion.MagnifyShrink);
+                if (sl.Cur < 1) { sl.Cur = 1; sl.Vel = Math.Max(0, sl.Vel); }
+                if (Spring.Settled(sl.Cur, sl.Vel, target)) { sl.Cur = target; sl.Vel = 0; }
                 if (sl.Cur != 1) busy = true;
                 double lift = 0;
                 if (_bounce.TryGetValue(sl.Key, out var b) && b.IsActive) { lift = b.Offset(now) * 18 * K; busy = true; }
@@ -92,7 +95,7 @@ namespace KutiDock.Tiles
             }
             // Büyüyen ya da zıplayan simge varken hepsi katmanda çizilir; katman kullanılamazsa eski yol (dock içinde dönüşüm).
             bool lifted = draw.Exists(d => d.Scale > 1.0005 || d.LiftX != 0 || d.LiftY != 0);
-            if (lifted && (_zoom ??= new ZoomLayer()).Draw(this, draw, 44 * K))
+            if (lifted && (_zoom ??= new ZoomLayer()).Draw(this, draw, 46 * K))
             {
                 foreach (var sl in _slots) { sl.Img.Opacity = 0; sl.Scale.ScaleX = sl.Scale.ScaleY = 1; sl.Lift.X = sl.Lift.Y = 0; }
             }
@@ -329,7 +332,7 @@ namespace KutiDock.Tiles
         /// <summary>Sağ tık: pencere listesi, yeni pencere, kapat.</summary>
         void Menu(AppItem it, FrameworkElement target)
         {
-            var m = new ContextMenu(); OutsideCloser.Attach(m);
+            var m = new ContextMenu(); OutsideCloser.Attach(m, S.Settings.Edge);
             var fg = Native.GetForegroundWindow();
             var wins = it.Windows.Where(Native.IsWindowVisible).ToList();
             foreach (var h in wins)

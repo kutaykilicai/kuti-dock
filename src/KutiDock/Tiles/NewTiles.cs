@@ -424,7 +424,7 @@ namespace KutiDock.Tiles
             ToolTip = "Ekran görüntüsü (ShareX): tıkla = bölge, sağ tık = diğer seçenekler";
             OnClick(() => Capture(ShareXCapture.Bolge));
             Ui.PressEffect(this);
-            var m = new ContextMenu(); OutsideCloser.Attach(m);
+            var m = new ContextMenu(); OutsideCloser.Attach(m, S.Settings.Edge);
             void Add(string h, Action a) { var i = new MenuItem { Header = h }; i.Click += (_, _) => a(); m.Items.Add(i); }
             Add("Bölge seç", () => Capture(ShareXCapture.Bolge));
             Add("Etkin pencere", () => Capture(ShareXCapture.Pencere));

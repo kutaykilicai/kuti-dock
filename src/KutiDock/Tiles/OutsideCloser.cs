@@ -33,14 +33,15 @@ namespace KutiDock.Tiles
         public static void Attach(Popup p)
         {
             Entry e = null;
-            p.Opened += (_, _) => { Remove(e); e = new Entry { Close = () => p.IsOpen = false, Anchor = p.PlacementTarget as FrameworkElement }; Add(e); };
+            p.Opened += (_, _) => { Remove(e); e = new Entry { Close = () => Anim.PopOut(p.Child, () => p.IsOpen = false), Anchor = p.PlacementTarget as FrameworkElement }; Add(e); };
             p.Closed += (_, _) => Remove(e);
         }
 
-        public static void Attach(ContextMenu m)
+        public static void Attach(ContextMenu m, KutiDock.Core.DockEdge edge)
         {
             Entry e = null;
-            m.Opened += (_, _) => { Remove(e); e = new Entry { Close = () => m.IsOpen = false, Anchor = m.PlacementTarget as FrameworkElement }; Add(e); };
+            m.Opened += (_, _) => Anim.PopIn(m, edge, menu: true); // 1.6.5: Apple tarzı yay
+            m.Opened += (_, _) => { Remove(e); e = new Entry { Close = () => Anim.PopOut(m, () => m.IsOpen = false), Anchor = m.PlacementTarget as FrameworkElement }; Add(e); };
             m.Closed += (_, _) => Remove(e);
         }
 

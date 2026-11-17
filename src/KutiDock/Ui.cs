@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Windows.Media.Effects;
+using KutiDock.Core;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -50,10 +54,56 @@ namespace KutiDock
     }
 
     /// <summary>Açılma/kapanma animasyonları (Gravitone'un yumuşak geçişlerinden esinlenildi; ayarlardan kapatılabilir).</summary>
+    /// <summary>
+    /// 1.6.5: tek değerli yay animasyonu. Yalnızca hareket sürerken ekran yenilemesine (CompositionTarget.Rendering) bağlanır;
+    /// hedef yarıda değişirse konum ve hız korunarak yeni hedefe döner.
+    /// </summary>
+    internal sealed class SpringRun
+    {
+        static readonly Stopwatch Clock = Stopwatch.StartNew();
+        double _x, _v, _target, _last;
+        SpringSpec _spec;
+        Action _done;
+        /// <summary>Değeri uygulayan (kenar/mesafe değişince yenilenebilir).</summary>
+        public Action<double> Apply;
+        bool _on;
+
+        public SpringRun(double x, Action<double> apply) { _x = _target = x; Apply = apply; }
+        public double Value => _x;
+        public double Target => _target;
+
+        public void To(double target, SpringSpec spec, Action done = null)
+        {
+            _target = target; _spec = spec; _done = done; // önceki hedefin işi iptal (kesildi)
+            if (_on) return;
+            _on = true; _last = Clock.Elapsed.TotalSeconds;
+            CompositionTarget.Rendering += Tick;
+        }
+
+        /// <summary>Hıza dürtü ver (zıplama), hedef aynı kalır.</summary>
+        public void Kick(double velocity, SpringSpec spec) { _v += velocity; To(_target, spec, _done); }
+
+        public void Jump(double x)
+        {
+            Stop(); _x = _target = x; _v = 0; _done = null; Apply?.Invoke(x);
+        }
+
+        void Stop() { if (_on) { _on = false; CompositionTarget.Rendering -= Tick; } }
+
+        void Tick(object sender, EventArgs e)
+        {
+            double now = Clock.Elapsed.TotalSeconds, dt = Math.Clamp(now - _last, 0, 1.0 / 20); _last = now;
+            (_x, _v) = Spring.Step(_x, _v, _target, dt, _spec);
+            if (Spring.Settled(_x, _v, _target)) { _x = _target; _v = 0; Stop(); }
+            Apply?.Invoke(_x);
+            if (!_on) { var d = _done; _done = null; d?.Invoke(); }
+        }
+    }
+
     internal static class Anim
     {
         public static bool Enabled = true;
-        static readonly IEasingFunction Out = new CubicEase { EasingMode = EasingMode.EaseOut };
+        static readonly ConditionalWeakTable<UIElement, SpringRun> Runs = new();
 
         static Point Origin(KutiDock.Core.DockEdge e) => e switch
         {
@@ -61,43 +111,85 @@ namespace KutiDock
             KutiDock.Core.DockEdge.Sag => new Point(1, 0.5), _ => new Point(0.5, 1),
         };
 
-        /// <summary>Panel dock'tan doğru büyüyerek ve belirerek açılır (macOS menü/panel hissi).</summary>
-        public static void PopIn(UIElement el, KutiDock.Core.DockEdge edge)
+        static UIElement Body(UIElement el) => el is Window w ? w.Content as UIElement : el;
+
+        /// <summary>
+        /// Panel ya da menü dock'tan doğru büyür: küçük, bulanık ve saydam başlar; hafif taşmalı yayla netleşir.
+        /// Kapanırken açılırsa olduğu yerden geri döner.
+        /// </summary>
+        public static void PopIn(UIElement el, KutiDock.Core.DockEdge edge, bool menu = false)
         {
+            el = Body(el);
             if (!Enabled || el == null) return;
-            if (el is Window w) { el = w.Content as UIElement; if (el == null) return; }
-            var st = new ScaleTransform(0.92, 0.92);
+            double from = menu ? AppleMotion.MenuFromScale : AppleMotion.PanelFromScale, blurMax = menu ? AppleMotion.PanelBlur / 2 : AppleMotion.PanelBlur;
+            var st = el.RenderTransform as ScaleTransform ?? new ScaleTransform();
             el.RenderTransform = st; el.RenderTransformOrigin = Origin(edge);
-            var d = TimeSpan.FromMilliseconds(190);
-            var a = new DoubleAnimation(0.92, 1, d) { EasingFunction = Out };
-            st.BeginAnimation(ScaleTransform.ScaleXProperty, a); st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
-            el.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)));
+            el.BeginAnimation(UIElement.OpacityProperty, null);
+            var blur = new BlurEffect { Radius = blurMax, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
+            if (!Runs.TryGetValue(el, out var run)) { run = new SpringRun(0, null); Runs.Add(el, run); }
+            var e0 = el;
+            run.Apply = p =>
+            {
+                st.ScaleX = st.ScaleY = Math.Max(0.01, from + (1 - from) * p);
+                e0.Opacity = AppleMotion.Opacity(p);
+                double r = AppleMotion.Blur(p, blurMax);
+                if (r > 0.3) { if (e0.Effect is BlurEffect b) b.Radius = r; } else if (e0.Effect is BlurEffect) e0.Effect = null; // bitince efekt kalkar (GPU yükü yok)
+            };
+            if (run.Target == 0 && run.Value == 0) run.Jump(0);
+            if (run.Value < 0.7) el.Effect = blur;
+            run.To(1, AppleMotion.PanelOpen);
         }
 
-        /// <summary>Tek zıplama (Başlat düğmesi): parabol, ekranın içine doğru.</summary>
+        /// <summary>Kapanış: taşmasız, kısa; bitince <paramref name="close"/>. Animasyon kapalıysa hemen kapatır.</summary>
+        public static void PopOut(UIElement el, Action close)
+        {
+            el = Body(el);
+            if (!Enabled || el == null || !Runs.TryGetValue(el, out var run)) { close(); return; }
+            run.To(0, AppleMotion.PanelClose, () => { close(); run.Jump(0); });
+        }
+
+        /// <summary>Tek zıplama (Başlat düğmesi): yay dürtüsüyle ekranın içine sıçrar, sallanarak yerine oturur.</summary>
         public static void Hop(FrameworkElement el, KutiDock.Core.DockEdge edge, double height)
         {
             if (!Enabled) return;
             var tt = el.RenderTransform as TranslateTransform ?? new TranslateTransform();
             el.RenderTransform = tt;
+            bool side = edge is KutiDock.Core.DockEdge.Sol or KutiDock.Core.DockEdge.Sag;
             double sign = edge is KutiDock.Core.DockEdge.Alt or KutiDock.Core.DockEdge.Sag ? -1 : 1;
-            var prop = edge is KutiDock.Core.DockEdge.Sol or KutiDock.Core.DockEdge.Sag ? TranslateTransform.XProperty : TranslateTransform.YProperty;
-            tt.BeginAnimation(prop, new DoubleAnimation(0, sign * height, TimeSpan.FromMilliseconds(150)) { AutoReverse = true, EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+            if (!Runs.TryGetValue(el, out var run))
+            {
+                run = new SpringRun(0, x => { if (side) tt.X = x; else tt.Y = x; });
+                Runs.Add(el, run);
+            }
+            // ω·h·1,9 hızla tepe yaklaşık h olur (0,5 sönümde)
+            run.Kick(sign * height * 1.9 * 2 * Math.PI / AppleMotion.Press.Response, AppleMotion.Press);
         }
 
-        /// <summary>Dock belirir/çekilir: kaydırma + saydamlık (yaklaşık Gravitone gizle/göster hızı).</summary>
+        /// <summary>
+        /// Dock belirir/çekilir: tek bir yay ilerlemesi kaymayı ve saydamlığı sürer. Çekilirken imleç geri gelirse
+        /// olduğu yerden geri döner (kesilebilir).
+        /// </summary>
         public static void Slide(Window w, FrameworkElement body, KutiDock.Core.DockEdge edge, bool show, Action done = null, double distance = 14)
         {
-            if (!Enabled) { w.Opacity = 1; done?.Invoke(); return; }
+            w.BeginAnimation(UIElement.OpacityProperty, null);
             var tt = body.RenderTransform as TranslateTransform ?? new TranslateTransform();
             body.RenderTransform = tt;
+            if (!Enabled) { tt.X = tt.Y = 0; w.Opacity = 1; done?.Invoke(); return; }
+            bool side = edge is KutiDock.Core.DockEdge.Sol or KutiDock.Core.DockEdge.Sag;
             double off = distance * (edge is KutiDock.Core.DockEdge.Alt or KutiDock.Core.DockEdge.Sag ? 1 : -1);
-            var prop = edge is KutiDock.Core.DockEdge.Sol or KutiDock.Core.DockEdge.Sag ? TranslateTransform.XProperty : TranslateTransform.YProperty;
-            var d = TimeSpan.FromMilliseconds(show ? 220 : 150);
-            tt.BeginAnimation(prop, new DoubleAnimation(show ? off : 0, show ? 0 : off, d) { EasingFunction = Out });
-            var fade = new DoubleAnimation(show ? 0 : 1, show ? 1 : 0, d);
-            fade.Completed += (_, _) => { w.BeginAnimation(UIElement.OpacityProperty, null); w.Opacity = 1; done?.Invoke(); };
-            w.BeginAnimation(UIElement.OpacityProperty, fade);
+            if (!Runs.TryGetValue(w, out var run))
+            {
+                run = new SpringRun(show ? 0 : 1, null);
+                Runs.Add(w, run);
+            }
+            run.Apply = p => // mesafe/kenar her çağrıda değişebilir
+            {
+                double o = off * (1 - p);
+                if (side) { tt.X = o; tt.Y = 0; } else { tt.Y = o; tt.X = 0; }
+                w.Opacity = Math.Clamp(p, 0, 1);
+            };
+            if (show && !w.IsVisible) run.Jump(0);
+            run.To(show ? 1 : 0, show ? AppleMotion.DockShow : AppleMotion.DockHide, () => { done?.Invoke(); if (!show) w.Opacity = 1; });
         }
     }
 

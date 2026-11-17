@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.4**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.5**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -18,6 +18,8 @@ C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.4**. Eski adı Kutay Dock.
 - Genie efekti: dock'tan tıklayınca ya da pencerenin kendi küçültme düğmesiyle (Win+Aşağı dahil) pencere simgesine
   akarak küçülür, geri açılırken aynı yoldan büyür. Direct3D 11 ve DirectComposition ile ekran kartında çizilir;
   kullanılamazsa normal küçültmeye döner.
+- Apple tarzı yay (spring) hareketi: büyütme, paneller, menüler ve gizlenip belirme yarıda kesilebilir, 60 fps'te
+  akar; panel dock'tan bulanık ve küçük başlayıp netleşerek açılır. Ayrıntı: [docs/APPLE-HAREKET.md](docs/APPLE-HAREKET.md).
 - Açılış ve dikkat sıçraması, çalışan uygulama noktaları, Windows 11 tarzı canlı pencere önizlemesi.
 - Otomatik gizleme: dock ekranın altında saklanır, imleç kenara gelince kayarak çıkar, imleç uzaklaşınca geri iner.
 - Tam ekran video ve oyunlarda dock gizlenir.
@@ -45,7 +47,7 @@ C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.4**. Eski adı Kutay Dock.
 
 ## Ekran görüntüleri
 
-Görüntüler 2560×1440 ekranda, 1.6.4 ile alındı.
+Görüntüler 2560×1440 ekranda, 1.6.4 ile alındı (1.6.5'te görünüm aynı, yalnızca hareket değişti).
 
 Dock, solda Başlat, arama ve uygulamalar:
 
@@ -102,6 +104,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.5** Apple tarzı yay animasyonları (büyütme, paneller, menüler, otomatik gizleme, Genie zamanlaması).
 - **1.6.4** Pencerenin kendi küçültme düğmesinde de Genie; paneller ve sağ tık menüleri dışarı tıklayınca ve Esc ile kapanır.
 - **1.6.3** Görev çubuğu tamamen kaldırılır, dock otomatik gizlenir, Genie daha güvenilir.
 - **1.6.2** Klasik dock yeniden varsayılan; simgelerde Mac büyütmesi, sıçrama ve Genie.

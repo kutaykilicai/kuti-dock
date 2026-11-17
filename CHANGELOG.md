@@ -1,5 +1,11 @@
 # Değişiklik günlüğü
 
+## 1.6.5 (2026-11-17)
+- Apple tarzı hareket (yay/spring, kesilebilir): hover büyütme, kullanım/ses/disk/sistem panelleri, sağ tık menüleri,
+  otomatik gizlenip belirme ve Başlat zıplaması. Paneller dock'tan küçük, bulanık ve saydam başlayıp hafif taşmayla
+  oturur; kapanış kısa ve taşmasız. Genie'de küçültme yumuşak başlar, geri açılma hızlı başlayıp yumuşak oturur.
+- İlkeler ve değerler: docs/APPLE-HAREKET.md.
+
 ## 1.6.4 (2026-11-17)
 - Pencerenin kendi küçültme düğmesi ya da Win+Aşağı ile küçültmede de Genie oynar; dock'tan geri açılış Genie ile büyür.
   Öndeki pencerenin görüntüsü arka planda alınır; Windows'un küçültme animasyonu yalnızca o pencere için kapatılır.

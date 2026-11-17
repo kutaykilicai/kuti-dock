@@ -862,3 +862,75 @@ public class V164Tests
         Assert.True(MinimizeGeniePolicy.Refresh >= TimeSpan.FromSeconds(2));    // düşük maliyet
     }
 }
+
+public class V165AppleMotionTests
+{
+    static (double X, double V, double Peak, double T) Run(SpringSpec s, double from, double to, double dt = 1.0 / 60, double max = 3)
+    {
+        double x = from, v = 0, peak = from, t = 0;
+        while (t < max && !(t > 0 && Spring.Settled(x, v, to)))
+        {
+            (x, v) = Spring.Step(x, v, to, dt, s); t += dt;
+            peak = to > from ? Math.Max(peak, x) : Math.Min(peak, x);
+        }
+        return (x, v, peak, t);
+    }
+
+    [Fact]
+    public void SpringsSettleQuicklyAndOvershootOnlyAsDesigned()
+    {
+        foreach (var s in new[] { AppleMotion.MagnifyGrow, AppleMotion.MagnifyShrink, AppleMotion.PanelOpen, AppleMotion.PanelClose, AppleMotion.DockShow, AppleMotion.DockHide })
+        {
+            var r = Run(s, 0, 1);
+            Assert.True(r.T < 1.0, $"{s} oturması {r.T:0.00} sn"); // kısa: Apple hareketi çabuk
+            Assert.True(Math.Abs(r.X - 1) < 0.002);
+            double over = r.Peak - 1;
+            if (s.Damping >= 1) Assert.True(over < 0.001, $"{s} taşmamalı ({over:0.000})");
+            else Assert.True(over < 0.06, $"{s} abartılı taşma ({over:0.000})"); // abartısız
+        }
+        Assert.True(Run(AppleMotion.PanelOpen, 0, 1).Peak > 1.005); // açılış hafif taşar (canlı)
+        Assert.True(Run(AppleMotion.PanelClose, 1, 0).T < Run(AppleMotion.PanelOpen, 0, 1).T); // kapanış daha kısa
+    }
+
+    [Fact]
+    public void SpringIsInterruptibleWithoutJump()
+    {
+        double x = 0, v = 0;
+        for (int i = 0; i < 6; i++) (x, v) = Spring.Step(x, v, 1, 1.0 / 60, AppleMotion.DockShow);
+        Assert.True(x > 0.1 && x < 0.95 && v > 0);
+        // yarıda geri çağrıldı: konum sıçramaz, hız korunur ve yön yumuşakça döner
+        var (x2, v2) = Spring.Step(x, v, 0, 1.0 / 60, AppleMotion.DockHide);
+        Assert.True(Math.Abs(x2 - x) < 0.1);
+        Assert.True(x2 >= x - 0.05);
+        var r = Run(AppleMotion.DockHide, x2, 0);
+        Assert.True(Math.Abs(r.X) < 0.002);
+    }
+
+    [Fact]
+    public void SpringStableOnFrameDrops()
+    {
+        double x = 0, v = 0;
+        for (int i = 0; i < 40; i++) (x, v) = Spring.Step(x, v, 1, 0.05, AppleMotion.MagnifyGrow); // 20 fps takılma
+        Assert.InRange(x, 0.99, 1.01);
+        (x, v) = Spring.Step(0, 0, 1, 0, AppleMotion.MagnifyGrow);
+        Assert.Equal(0, x);
+    }
+
+    [Fact]
+    public void PanelFadeBlurAndGenieTiming()
+    {
+        Assert.Equal(0, AppleMotion.Opacity(0)); Assert.Equal(1, AppleMotion.Opacity(0.7));
+        Assert.Equal(AppleMotion.PanelBlur, AppleMotion.Blur(0, AppleMotion.PanelBlur));
+        Assert.Equal(0, AppleMotion.Blur(0.7, AppleMotion.PanelBlur));
+        Assert.Equal(0, AppleMotion.Blur(1.05, AppleMotion.PanelBlur)); // taşmada bulanıklık geri gelmez
+        foreach (var expand in new[] { false, true })
+        {
+            Assert.Equal(0, AppleMotion.Genie(0, expand), 6); Assert.Equal(1, AppleMotion.Genie(1, expand), 6);
+            double prev = 0;
+            for (double t = 0.02; t <= 1; t += 0.02) { double e = AppleMotion.Genie(t, expand); Assert.True(e >= prev - 1e-9); prev = e; } // geri gitmez
+        }
+        Assert.True(AppleMotion.Genie(0.25, true) > 0.5);   // geri açılma hızlı başlar
+        Assert.True(AppleMotion.Genie(0.1, false) < 0.1);   // küçültme yumuşak başlar
+        Assert.True(AppleMotion.PanelFromScale < AppleMotion.MenuFromScale && AppleMotion.MenuFromScale < 1);
+    }
+}
