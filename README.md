@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.10**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.11**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.11** Arama panelinde Everything anahtarı (gerekirse Everything'i arka planda başlatır). WARP'a dock'tan bağlanınca uygulaması da başlar.
 - **1.6.10** Sıfırdan açılan uygulamalar dock saklıyken de simgeden Genie ile açılır; dock kısa süre belirir. Arama önce uygulamaları gösterir.
 - **1.6.9** Dock her ekrana kenar boşluklarıyla sığar (küçültme, kompakt grup, taşma menüsü).
 - **1.6.8** Dock fareyi takip eder: saklıyken hangi ekranın kenarına gidersen orada belirir.

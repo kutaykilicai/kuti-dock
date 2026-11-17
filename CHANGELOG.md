@@ -1,5 +1,15 @@
 # Değişiklik günlüğü
 
+## 1.6.11 (2026-11-18)
+- Arama panelinde, kutunun altında küçük bir **Everything** anahtarı (Apple tarzı). Ayarlar'daki "Aramada Everything
+  kullan" ile aynı ayar (`SearchWithEverything`), değişince `ayarlar.json`'a yazılır. Açılınca Everything çalışmıyorsa
+  dock onu arka planda başlatır (`Everything.exe -startup`, pencere açılmaz) ve dosyaları Everything ile arar; kapatılınca
+  Windows aramasına döner ve yalnızca dock'un kendi başlattığı Everything'i `-exit` ile kapatır. Böylece Everything'in
+  Windows açılışında başlaması gerekmez.
+- WARP: Cloudflare WARP artık Windows açılışında başlamayabilir. Dock'taki WARP'a bağlanmak için tıklanınca arayüzü
+  (tepsi) çalışmıyorsa önce o başlatılır, sonra `warp-cli connect`. Bağlantıyı keserken arayüz açılmaz.
+- Testler: Everything.exe'nin yeri (Program Files, sonra x86), başlatma/kapatma argümanları, WARP arayüzü yalnızca bağlanırken.
+
 ## 1.6.10 (2026-11-17)
 - Sıfırdan açılan uygulamalarda Genie çoğu zaman oynamıyordu. Kök neden: hata.log'da "İlk açılış Genie: bulundu
   (Notepad)" ardından "atlandı (Notepad): simge hedefi yok". Simge hedefi `IsVisible` şartı arıyordu; dock genelde

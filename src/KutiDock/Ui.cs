@@ -51,6 +51,26 @@ namespace KutiDock
             e.MouseLeave += (_, _) => To(1);
         }
 
+        /// <summary>1.6.11: küçük Apple tarzı anahtar (açıkken yeşil iz, düğme sağa kayar). Tıklayınca durum değişir.</summary>
+        public static Border MiniSwitch(bool on, Action<bool> changed)
+        {
+            var knobMove = new TranslateTransform(on ? 12 : 0, 0);
+            var knob = new Ellipse { Width = 14, Height = 14, Fill = Brushes.White, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 0), RenderTransform = knobMove,
+                Effect = new DropShadowEffect { BlurRadius = 3, ShadowDepth = 1, Opacity = 0.3 } };
+            var trackOn = (Color)ColorConverter.ConvertFromString("#34C759"); var trackOff = (Color)ColorConverter.ConvertFromString("#48787880");
+            var fill = new SolidColorBrush(on ? trackOn : trackOff);
+            var sw = new Border { Width = 30, Height = 18, CornerRadius = new CornerRadius(9), Background = fill, Child = knob, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
+            sw.MouseLeftButtonUp += (_, e) =>
+            {
+                on = !on;
+                var d = TimeSpan.FromMilliseconds(Anim.Enabled ? 180 : 0);
+                knobMove.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(on ? 12 : 0, d) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+                fill.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(on ? trackOn : trackOff, d));
+                e.Handled = true;
+                changed(on);
+            };
+            return sw;
+        }
     }
 
     /// <summary>Açılma/kapanma animasyonları (Gravitone'un yumuşak geçişlerinden esinlenildi; ayarlardan kapatılabilir).</summary>

@@ -339,12 +339,14 @@ namespace KutiDock.Tiles
 
     /// <summary>
     /// Cloudflare One Client (WARP): durum + tek tıkla bağlan/kes. Yalnızca warp-cli (pencere açmadan, CreateNoWindow);
-    /// uygulama penceresi açılmaz, kullanım koşulları kendiliğinden kabul edilmez.
+    /// uygulama penceresi açılmaz, kullanım koşulları kendiliğinden kabul edilmez. 1.6.11: WARP Windows açılışında başlamaz;
+    /// dock'tan bağlanırken arayüzü (tepsi) çalışmıyorsa önce o başlatılır.
     /// </summary>
     internal sealed class WarpTile : Tile
     {
         public override string Id => "warp";
         static readonly string Cli = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Cloudflare", "Cloudflare WARP", "warp-cli.exe");
+        static readonly string Gui = Path.Combine(Path.GetDirectoryName(Cli), "Cloudflare WARP.exe");
         readonly TextBlock _state; readonly System.Windows.Shapes.Ellipse _dot;
         WarpState _now = WarpState.Unknown; DateTime _next; bool _busy;
 
@@ -388,6 +390,11 @@ namespace KutiDock.Tiles
             bool connect = _now != WarpState.Connected;
             Show(WarpState.Connecting);
             if (!connect) _state.Text = "Kesiliyor…";
+            if (Warp.ShouldLaunchGui(connect, Process.GetProcessesByName("Cloudflare WARP").Length > 0) && File.Exists(Gui))
+            {
+                try { Process.Start(new ProcessStartInfo(Gui) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(Gui) })?.Dispose(); } catch (Exception) { }
+                await System.Threading.Tasks.Task.Delay(2500); // arayüz servise bağlansın
+            }
             await RunCli(connect ? "connect" : "disconnect");
             await System.Threading.Tasks.Task.Delay(1500);
             _busy = false; _next = DateTime.MinValue;

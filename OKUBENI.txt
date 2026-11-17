@@ -7,6 +7,12 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.11'DE NE DEĞİŞTİ
+- Arama panelinde küçük bir Everything anahtarı var (Ayarlar'a gitmeye gerek yok). Açınca Everything çalışmıyorsa dock
+  onu arka planda başlatır ve dosyaları Everything ile arar; kapatınca Windows aramasına döner. Ayarlar'daki seçenekle
+  aynı ayardır ve kalıcıdır.
+- WARP Windows açılışında başlamasa da olur: dock'taki WARP'a tıklayınca uygulama çalışmıyorsa önce o açılır, sonra bağlanır.
+
 1.6.10'DA NE DEĞİŞTİ
 - Sıfırdan açılan uygulamalarda Genie animasyonu çoğu zaman oynamıyordu: dock kenarda saklıyken simge "görünmez"
   sayıldığı için hedef bulunamıyordu. Hedef artık dock saklıyken de simgenin dock açıldığındaki yerinden hesaplanır;

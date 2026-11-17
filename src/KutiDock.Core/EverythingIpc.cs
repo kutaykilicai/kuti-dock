@@ -16,6 +16,20 @@ public sealed record SearchHit(string Name, string Folder, bool IsFolder)
 public static class EverythingIpc
 {
     public const string WindowClass = "EVERYTHING_TASKBAR_NOTIFICATION";
+    /// <summary>1.6.11: dock Everything'i arka planda (tepside, pencere açmadan) başlatır; kendi başlattığını "-exit" ile kapatır.</summary>
+    public const string StartArgs = "-startup", ExitArgs = "-exit";
+
+    /// <summary>1.6.11: Everything.exe'nin yeri (Program Files, sonra Program Files (x86)); bulunamazsa null.</summary>
+    public static string? FindExe(Func<string, bool> exists, params string?[] programFilesDirs)
+    {
+        foreach (var dir in programFilesDirs)
+        {
+            if (string.IsNullOrEmpty(dir)) continue;
+            var exe = Path.Combine(dir, "Everything", "Everything.exe");
+            if (exists(exe)) return exe;
+        }
+        return null;
+    }
     public const int CopyDataQueryW = 2;          // EVERYTHING_IPC_COPYDATAQUERYW
     const int ItemFolder = 0x1, ItemDrive = 0x2;  // EVERYTHING_IPC_FOLDER / _DRIVE
 

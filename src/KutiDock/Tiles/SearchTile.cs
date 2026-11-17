@@ -14,8 +14,8 @@ using KutiDock.Core;
 namespace KutiDock.Tiles
 {
     /// <summary>
-    /// Everything ile arka planda dosya arama (belgelenmiş IPC, WM_COPYDATA). Everything başlatılmaz, penceresi açılmaz,
-    /// ayarlarına dokunulmaz; çalışmıyorsa "Everything çalışmıyor" denir.
+    /// Everything ile arka planda dosya arama (belgelenmiş IPC, WM_COPYDATA). Penceresi açılmaz, ayarlarına dokunulmaz;
+    /// 1.6.11: aramadaki Everything anahtarı açıkken çalışmıyorsa EverythingLauncher onu tepside başlatır.
     /// </summary>
     internal sealed class EverythingClient : IDisposable
     {
@@ -105,7 +105,12 @@ namespace KutiDock.Tiles
             Child = Ui.Glyph("M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z", t.Fg, 20 * K);
             ToolTip = "Ara";
             MouseEnter += (_, _) => Background = t.TileHover; MouseLeave += (_, _) => Background = Brushes.Transparent;
-            OnClick(() => SearchPanel.Toggle(this, S.Settings.Edge, S.Settings.SearchWithEverything));
+            OnClick(() => SearchPanel.Toggle(this, S.Settings.Edge, S.Settings.SearchWithEverything, v =>
+            {
+                // 1.6.11: aramadaki anahtar Ayarlar'daki "Aramada Everything kullan" ile aynı ayar; kalıcı
+                S.Settings.SearchWithEverything = v;
+                try { S.Settings.Save(System.IO.Path.Combine(Services.DataDir, "ayarlar.json")); } catch (Exception) { }
+            }));
             Ui.PressEffect(this);
         }
         public override void Refresh() { }
@@ -119,10 +124,10 @@ namespace KutiDock.Tiles
     internal sealed class SearchPanel : Window
     {
         static SearchPanel _current;
-        public static void Toggle(FrameworkElement anchor, DockEdge edge, bool everything)
+        public static void Toggle(FrameworkElement anchor, DockEdge edge, bool everything, Action<bool> setEverything)
         {
             if (_current != null) { _current.Close(); return; }
-            _current = new SearchPanel(anchor, edge, everything);
+            _current = new SearchPanel(anchor, edge, everything, setEverything);
             _current.Show();
             _current.Activate();
             Native.Activate(new WindowInteropHelper(_current).Handle); // dock odak almadığı için klavyeyi panele ver
@@ -130,18 +135,19 @@ namespace KutiDock.Tiles
 
         readonly FrameworkElement _anchor;
         readonly DockEdge _edge;
-        readonly bool _everything;
+        readonly Action<bool> _setEverything;
+        bool _everything;
         readonly TextBox _box;
         readonly ListBox _list;
         readonly TextBlock _status;
-        readonly EverythingClient _ev;
+        EverythingClient _ev;
         readonly DispatcherTimer _typing = new() { Interval = TimeSpan.FromMilliseconds(120) };
         int _seq;
         bool _closing;
 
-        SearchPanel(FrameworkElement anchor, DockEdge edge, bool everything)
+        SearchPanel(FrameworkElement anchor, DockEdge edge, bool everything, Action<bool> setEverything)
         {
-            _anchor = anchor; _edge = edge; _everything = everything;
+            _anchor = anchor; _edge = edge; _everything = everything; _setEverything = setEverything;
             if (everything) _ev = new EverythingClient();
             WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
             ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Topmost = true; Width = 440; SizeToContent = SizeToContent.Height;
@@ -161,8 +167,15 @@ namespace KutiDock.Tiles
             ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
             _list.MouseLeftButtonUp += (_, e) => { if (_list.SelectedItem is ListBoxItem { Tag: QuickHit h }) Open(h, Keyboard.Modifiers.HasFlag(ModifierKeys.Control)); };
 
+            // 1.6.11: kutunun altında küçük Everything anahtarı (Ayarlar'a gitmeden)
+            var evRow = new DockPanel { Margin = new Thickness(4, 0, 4, 4) };
+            var evSwitch = Ui.MiniSwitch(everything, on => SetEverything(on));
+            evSwitch.ToolTip = "Açıkken dosyalar Everything ile aranır (çalışmıyorsa arka planda başlatılır); kapalıyken Windows araması";
+            DockPanel.SetDock(evSwitch, Dock.Right); evRow.Children.Add(evSwitch);
+            evRow.Children.Add(new TextBlock { Text = "Everything", Foreground = Theme.B("#C8C8CE"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 8, 0) });
+
             var stack = new StackPanel();
-            stack.Children.Add(_box); stack.Children.Add(_status); stack.Children.Add(_list);
+            stack.Children.Add(_box); stack.Children.Add(evRow); stack.Children.Add(_status); stack.Children.Add(_list);
             Content = new Border
             {
                 Background = Theme.B("#F21C1C1F"), BorderBrush = Theme.B("#33FFFFFF"), BorderThickness = new Thickness(1),
@@ -175,7 +188,27 @@ namespace KutiDock.Tiles
             Deactivated += (_, _) => { if (!_closing) Close(); };
             ContentRendered += (_, _) => { Place(); _box.Focus(); Anim.PopIn(this, _edge); };
             SizeChanged += (_, _) => Place();
-            if (everything && !EverythingClient.Running) _status.Text = "Everything çalışmıyor (Kuti Dock onu başlatmaz).";
+            Search();
+            if (everything && !EverythingClient.Running) StartEverything();
+        }
+
+        /// <summary>1.6.11: anahtar. Açılınca Everything (gerekirse) başlatılır; kapanınca Windows aramasına dönülür.</summary>
+        void SetEverything(bool on)
+        {
+            _everything = on;
+            _setEverything?.Invoke(on);
+            _box.Focus();
+            if (on) { _ev ??= new EverythingClient(); if (!EverythingClient.Running) { StartEverything(); return; } }
+            else EverythingLauncher.StopIfStartedByDock();
+            Search();
+        }
+
+        async void StartEverything()
+        {
+            _status.Text = "Everything başlatılıyor…";
+            bool ok = await EverythingLauncher.EnsureRunning();
+            if (_closing || !_everything) return;
+            if (!ok) { _status.Text = "Everything bulunamadı ya da başlatılamadı."; return; }
             Search();
         }
 
@@ -197,7 +230,7 @@ namespace KutiDock.Tiles
                 var roots = WindowsSearch.UserRoots();
                 var hits = await _ev.Search(WinSearch.EverythingQuery(q, roots), 40);
                 if (seq != _seq) return;
-                if (hits == null) { if (apps.Count + settings.Count == 0) { _list.Items.Clear(); } _status.Text = "Everything çalışmıyor (Kuti Dock onu başlatmaz)."; return; }
+                if (hits == null) { if (apps.Count + settings.Count == 0) { _list.Items.Clear(); } _status.Text = "Everything çalışmıyor."; return; }
                 files = hits.Select(h => new QuickHit(HitKind.File, h.Name, h.Folder, h.FullPath))
                     .Where(h => WinSearch.AllowedFile(h.Target, roots)).Take(8).ToList();
             }
@@ -283,6 +316,40 @@ namespace KutiDock.Tiles
             _typing.Stop(); _ev?.Dispose();
             if (_current == this) _current = null;
             base.OnClosed(e);
+        }
+    }
+
+    /// <summary>1.6.11: Everything'i arka planda (-startup: tepside, penceresiz) başlatır; yalnızca kendi başlattığını kapatır.</summary>
+    internal static class EverythingLauncher
+    {
+        static bool _startedByDock;
+
+        static string Exe => EverythingIpc.FindExe(System.IO.File.Exists,
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+
+        public static async Task<bool> EnsureRunning()
+        {
+            if (EverythingClient.Running) return true;
+            var exe = Exe;
+            if (exe == null) return false;
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, EverythingIpc.StartArgs) { UseShellExecute = false, CreateNoWindow = true })?.Dispose();
+                _startedByDock = true;
+            }
+            catch (Exception) { return false; }
+            for (int i = 0; i < 50 && !EverythingClient.Running; i++) await Task.Delay(100);
+            return EverythingClient.Running;
+        }
+
+        public static void StopIfStartedByDock()
+        {
+            if (!_startedByDock) return;
+            _startedByDock = false;
+            var exe = Exe;
+            if (exe == null) return;
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, EverythingIpc.ExitArgs) { UseShellExecute = false, CreateNoWindow = true })?.Dispose(); }
+            catch (Exception) { }
         }
     }
 
