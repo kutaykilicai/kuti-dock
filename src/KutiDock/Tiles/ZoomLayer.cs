@@ -48,8 +48,14 @@ namespace KutiDock.Tiles
                 if (!strip.IsVisible || PresentationSource.FromVisual(strip) == null) return false;
                 var a = strip.PointToScreen(new Point(-pad, -pad));
                 var b = strip.PointToScreen(new Point(strip.ActualWidth + pad, strip.ActualHeight + pad));
-                var r = ((int)Math.Floor(Math.Min(a.X, b.X)), (int)Math.Floor(Math.Min(a.Y, b.Y)),
-                         (int)Math.Ceiling(Math.Abs(b.X - a.X)), (int)Math.Ceiling(Math.Abs(b.Y - a.Y)));
+                int rx = (int)Math.Floor(Math.Min(a.X, b.X)), ry = (int)Math.Floor(Math.Min(a.Y, b.Y));
+                int rr = rx + (int)Math.Ceiling(Math.Abs(b.X - a.X)), rb = ry + (int)Math.Ceiling(Math.Abs(b.Y - a.Y));
+                // 1.6.9: katman şeridin ekranından dışarı (yan ekrana) taşmaz; büyüyen simge ekran kenarında içeri itilir
+                var mon = Native.MonitorAt((rx + rr) / 2, (ry + rb) / 2, Native.MONITOR_DEFAULTTONEAREST);
+                if (Native.MonitorBox(mon, out var mb, out _))
+                { rx = Math.Max(rx, mb.Left); ry = Math.Max(ry, mb.Top); rr = Math.Min(rr, mb.Right); rb = Math.Min(rb, mb.Bottom); }
+                if (rr - rx < 2 || rb - ry < 2) return false;
+                var r = (rx, ry, rr - rx, rb - ry);
                 if (!IsVisible) Show();
                 if (_hwnd == IntPtr.Zero) return false;
                 if (r != _rect)
@@ -75,8 +81,9 @@ namespace KutiDock.Tiles
                         _images[h] = img; _canvas.Children.Add(img);
                     }
                     img.Source = it.Source; img.Width = sw; img.Height = sh;
-                    Canvas.SetLeft(img, p0.X + it.OriginX * (rw - sw) + it.LiftX * f);
-                    Canvas.SetTop(img, p0.Y + it.OriginY * (rh - sh) + it.LiftY * f);
+                    double cw = _rect.W / Math.Max(0.1, VisualTreeHelper.GetDpi(this).DpiScaleX), ch = _rect.H / Math.Max(0.1, VisualTreeHelper.GetDpi(this).DpiScaleY);
+                    Canvas.SetLeft(img, Math.Clamp(p0.X + it.OriginX * (rw - sw) + it.LiftX * f, 0, Math.Max(0, cw - sw)));
+                    Canvas.SetTop(img, Math.Clamp(p0.Y + it.OriginY * (rh - sh) + it.LiftY * f, 0, Math.Max(0, ch - sh)));
                     keep.Add(h);
                 }
                 foreach (var gone in new List<FrameworkElement>(_images.Keys))

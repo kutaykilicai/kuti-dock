@@ -7,6 +7,12 @@ Ne bu?
   davranışı ve düzeni örnek alınarak SIFIRDAN yazıldı; onların kodu, logosu,
   ikonları, görselleri, adı ve lisans kontrolü kullanılmadı.
 
+1.6.9'DA NE DEĞİŞTİ
+- İkinci ekranda dock taşıyordu: şerit 2015 piksel, ikinci ekran 1920 piksel (iki ekran da %100). Dock artık bulunduğu
+  ekranın çalışma alanına kenar boşluklarıyla sığar. Sırayla: simgeler ve aralıklar orantılı küçülür (en az %70); yetmezse
+  ağ, WARP, disk ve CPU/RAM tek kompakt gruba geçer; o da yetmezse fazla widget'lar "»" menüsüne alınır. Saat ve ses
+  her zaman görünür. Sığdığı ekranda (ana ekran) görünüm aynen kalır. Hover büyütmesi ekran kenarından taşmaz.
+
 1.6.8'DE NE DEĞİŞTİ
 - Dock fareyi takip eder: saklı dock, fare hangi ekranın alt (dock) kenarına giderse o ekranda belirir. İki ekranın
   ortak kenarı tetiklemez. Yerleşim her ekranın kendi ölçeğiyle (Per-Monitor V2: %115 ana ekran, %100 yan ekran).

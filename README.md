@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.8**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.9**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.9** Dock her ekrana kenar boşluklarıyla sığar (küçültme, kompakt grup, taşma menüsü).
 - **1.6.8** Dock fareyi takip eder: saklıyken hangi ekranın kenarına gidersen orada belirir.
 - **1.6.7** WhatsApp Web gibi Chrome uygulamaları dock'tan küçülür; ilk açılış Genie'si sistem genelinde.
 - **1.6.6** Ses bölümü onarıldı, Finder tarzı işlevli menü çubuğu, Chrome PWA'ları ayrı simgede, ilk açılışta Genie.

@@ -39,6 +39,10 @@ namespace KutiDock
         Debounce _fullscreen = new(2, 8);
         // 1.6.8: dock'un bulunduğu monitör (saklıyken fareyi takip eder); Zero: ana ekran
         IntPtr _mon;
+        // 1.6.9: ekrana sığdırma (ölçek → kompakt grup → taşma menüsü)
+        List<(string Id, Tile T)> _ids = new();
+        FitPlan _plan = FitPlan.Natural;
+        Border _overflow; bool _fitting;
         bool FollowOn => AutoHideOn;
         IntPtr DockMonitor => FollowOn && !_s.Settings.PrimaryOnly && _mon != IntPtr.Zero ? _mon : Native.PrimaryMonitor();
 
@@ -114,7 +118,7 @@ namespace KutiDock
             _row = vertical
                 ? new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4 * k, 0, 4 * k) }
                 : new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1 * k, 0, 1 * k, 0) };
-            _tiles = new List<Tile>();
+            _tiles = new List<Tile>(); _ids = new List<(string, Tile)>(); _plan = FitPlan.Natural; _overflow = null;
             foreach (var id in _only ?? set.Widgets)
             {
                 Tile t = id switch
@@ -135,7 +139,7 @@ namespace KutiDock
                     _ => null,
                 };
                 if (t == null) continue;
-                _tiles.Add(t);
+                _tiles.Add(t); _ids.Add((id, t));
                 // Dikeyde sütuna sığmayan geniş widget'lar (sistem, ağ, saat…) kompakt: orantılı küçültülür
                 _row.Children.Add(vertical ? new Viewbox { Child = t, StretchDirection = StretchDirection.DownOnly, MaxWidth = 52 * k, Margin = new Thickness(0, 1 * k, 0, 1 * k) } : t);
             }
@@ -236,6 +240,7 @@ namespace KutiDock
                 if (Native.MonitorBox(mon, out _, out var work))
                 {
                     uint md = Native.MonitorDpi(mon);
+                    if (Fit((work.Right - work.Left - 2.0 * DockMonitors.ToPixels(margin, md)) * 96.0 / md)) return; // düzen değişti: SizeChanged yeniden yerleştirir
                     int wpx = DockMonitors.ToPixels(w, md), hpx = DockMonitors.ToPixels(h, md), mpx = DockMonitors.ToPixels(margin, md);
                     var (px, py) = DockLayout.Position(set.Edge, work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top, wpx, hpx, mpx);
                     Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)Math.Round(px), (int)Math.Round(py), 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
@@ -260,7 +265,11 @@ namespace KutiDock
                 Left = _anchor == StripAnchor.SolAlt ? margin : SystemParameters.PrimaryScreenWidth - w - margin;
                 Top = SystemParameters.PrimaryScreenHeight - h - 6;
             }
-            else (Left, Top) = DockLayout.Position(set.Edge, area.Left, area.Top, area.Width, area.Height, w, h, margin);
+            else
+            {
+                if (Fit(area.Width - 2 * margin)) return;
+                (Left, Top) = DockLayout.Position(set.Edge, area.Left, area.Top, area.Width, area.Height, w, h, margin);
+            }
             // Bulanıklık dikdörtgen olmasın: pencere bölgesini yuvarlak köşeli yap
             int pw = (int)Math.Round(w * dpi.DpiScaleX), ph = (int)Math.Round(h * dpi.DpiScaleY), r = (int)Math.Round(32 * k * dpi.DpiScaleX);
             Native.SetWindowRgn(_hwnd, Native.CreateRoundRectRgn(0, 0, pw + 1, ph + 1, r, r), true);
@@ -330,6 +339,89 @@ namespace KutiDock
                 _autoHidden = !_auto.Shown;
                 UpdateVisibility();
             }
+        }
+
+        /// <summary>
+        /// 1.6.9: şerit <paramref name="available"/> DIP genişliğe sığsın (DockFit: ölçek ≥ %70 → kompakt grup → taşma menüsü).
+        /// Düzen değiştiyse true (pencere yeniden boyutlanır, Place SizeChanged ile yeniden çağrılır).
+        /// </summary>
+        bool Fit(double available)
+        {
+            if (_fitting || _anchor != StripAnchor.Kenar || DockLayout.Vertical(_s.Settings.Edge) || _s.Settings.FullWidth || _row == null) return false;
+            _fitting = true;
+            try
+            {
+                double k = _s.Settings.Scale;
+                var items = new List<FitItem>();
+                foreach (var (id, t) in _ids)
+                {
+                    if (!t.Wanted) continue;
+                    t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    double f = t.LayoutTransform is ScaleTransform st && st.ScaleX > 0 ? st.ScaleX : 1;
+                    items.Add(new FitItem(id, t.DesiredSize.Width / f));
+                }
+                var plan = DockFit.Plan(available, items, 2 * k + 2, 44 * k);
+                if (plan.SameAs(_plan) && plan.Scale >= _plan.Scale) return false; // küçülme hemen, büyüme %1 eşiğiyle (titreme olmasın)
+                ApplyFit(plan);
+                Dispatcher.BeginInvoke(new Action(Place), DispatcherPriority.Loaded); // boyut aynı kalsa da yeniden yerleştir
+                return true;
+            }
+            catch (Exception) { return false; }
+            finally { _fitting = false; }
+        }
+
+        void ApplyFit(FitPlan plan)
+        {
+            _plan = plan;
+            double k = _s.Settings.Scale;
+            foreach (var (_, t) in _ids) { if (t.Parent is Panel p) p.Children.Remove(t); t.LayoutTransform = null; }
+            _row.Children.Clear();
+            var spill = new List<Tile>();
+            System.Windows.Controls.Primitives.UniformGrid group = null;
+            int clockAt = -1;
+            foreach (var (id, t) in _ids)
+            {
+                bool compactMember = DockFit.CompactIds.Contains(id);
+                if (plan.Hidden.Contains(id) || (compactMember && plan.Hidden.Contains("compact"))) { spill.Add(t); continue; }
+                if (plan.Compact && compactMember)
+                {
+                    if (group == null) { group = new System.Windows.Controls.Primitives.UniformGrid { Rows = 2, VerticalAlignment = VerticalAlignment.Center }; _row.Children.Add(group); }
+                    t.LayoutTransform = new ScaleTransform(DockFit.CompactScale, DockFit.CompactScale);
+                    group.Children.Add(t);
+                    continue;
+                }
+                if (id == "clock") clockAt = _row.Children.Count;
+                _row.Children.Add(t);
+            }
+            if (spill.Count > 0)
+            {
+                // "»": fazla öğeler açılır panelde (gerçek widget'lar, tıklanabilir); saat ve ses her zaman şeritte
+                var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6 * k) };
+                foreach (var t in spill) panel.Children.Add(t);
+                var pop = new System.Windows.Controls.Primitives.Popup
+                {
+                    StaysOpen = false, AllowsTransparency = true, Placement = System.Windows.Controls.Primitives.PlacementMode.Top, VerticalOffset = -8,
+                    Child = new Border { Child = panel, Background = _theme.DockBg, BorderBrush = _theme.DockBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14 * k) },
+                };
+                _overflow = new Border
+                {
+                    Width = 40 * k, Height = 40 * k, Margin = new Thickness(2 * k, 0, 2 * k, 0), CornerRadius = new CornerRadius(10 * k), Background = Brushes.Transparent,
+                    VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, ToolTip = "Diğer widget'lar",
+                    Child = new TextBlock { Text = "»", FontSize = 20 * k, Foreground = _theme.Fg, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                };
+                pop.PlacementTarget = _overflow;
+                _overflow.MouseLeftButtonUp += (_, e) => { pop.IsOpen = !pop.IsOpen; e.Handled = true; };
+                if (clockAt >= 0) _row.Children.Insert(clockAt, _overflow); else _row.Children.Add(_overflow);
+            }
+            else _overflow = null;
+            _row.LayoutTransform = plan.Scale < 0.999 ? new ScaleTransform(plan.Scale, plan.Scale) : null;
+            Log("yerleşim: " + (plan.SameAs(FitPlan.Natural) ? "doğal" : $"ölçek {plan.Scale:0.00}{(plan.Compact ? ", kompakt grup" : "")}{(plan.Hidden.Count > 0 ? ", taşma: " + string.Join(",", plan.Hidden) : "")}"));
+        }
+
+        static void Log(string line)
+        {
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Dock {line}\n"); }
+            catch (Exception) { }
         }
 
         /// <summary>1.6.8: dock'u başka monitöre taşır: açıksa hemen saklanır, yeni monitörde kenardan kayarak belirir.</summary>

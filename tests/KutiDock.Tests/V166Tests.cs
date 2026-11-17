@@ -280,3 +280,67 @@ public class DockMonitorsTests
         Assert.False(s.PrimaryOnly);
     }
 }
+
+public class DockFitTests
+{
+    // Kasa 1.6.8'de ölçülen: dock 2015 px (her iki ekran 96 dpi). Ana ekran 2560 px, ikinci ekran 1920 px (-1920,272).
+    static readonly List<FitItem> Kasa =
+    [
+        new("start", 46), new("search", 46), new("apps", 700), new("ai", 220), new("volume", 90), new("system", 230),
+        new("network", 150), new("warp", 60), new("storage", 140), new("screenshot", 50), new("clock", 279),
+    ];
+    const double Overhead = 4;
+    static double Avail(int workPx, uint dpi) => (workPx - 2.0 * DockMonitors.ToPixels(8, dpi)) * 96.0 / dpi;
+
+    [Fact]
+    public void KasaNaturalWidth_Is2015()
+        => Assert.Equal(2015, DockFit.Width(Kasa, false, Array.Empty<string>(), Overhead, 44));
+
+    [Fact]
+    public void PrimaryScreen_Unchanged()
+        => Assert.Same(FitPlan.Natural, DockFit.Plan(Avail(2560, 96), Kasa, Overhead));
+
+    [Fact]
+    public void SecondScreen_ScalesProportionally_WithMargins()
+    {
+        var plan = DockFit.Plan(Avail(1920, 96), Kasa, Overhead);
+        Assert.False(plan.Compact);
+        Assert.Empty(plan.Hidden);
+        Assert.InRange(plan.Scale, DockFit.MinScale, 0.99);
+        double used = DockFit.Width(Kasa, false, plan.Hidden, Overhead, 44) * plan.Scale;
+        Assert.True(used <= 1920 - 16, $"şerit {used} px, kenar boşluklarıyla 1904 px'e sığmalı");
+    }
+
+    [Fact]
+    public void PerMonitorDpi_AvailableInDips()
+    {
+        Assert.Equal(1904, Avail(1920, 96), 3);
+        Assert.Equal((2560 - 18) * 96.0 / 110, Avail(2560, 110), 3); // %115 ekran: 8 DIP ≈ 9 px
+    }
+
+    [Fact]
+    public void NarrowScreen_UsesCompactGroupThenOverflow()
+    {
+        var compact = DockFit.Plan(1350, Kasa, Overhead);
+        Assert.True(compact.Compact);
+        Assert.Empty(compact.Hidden);
+        Assert.True(DockFit.Width(Kasa, true, compact.Hidden, Overhead, 44) * compact.Scale <= 1350.5);
+
+        var overflow = DockFit.Plan(900, Kasa, Overhead);
+        Assert.NotEmpty(overflow.Hidden);
+        Assert.Equal("screenshot", overflow.Hidden[0]);
+        Assert.InRange(overflow.Scale, DockFit.MinScale, 1);
+        foreach (var e in DockFit.Essential) Assert.DoesNotContain(e, overflow.Hidden); // saat ve ses her zaman görünür
+        Assert.True(DockFit.Width(Kasa, overflow.Compact, overflow.Hidden, Overhead, 44) * overflow.Scale <= 900.5);
+    }
+
+    [Fact]
+    public void ScaleNeverBelowMinimumBeforeHiding()
+    {
+        foreach (var avail in new[] { 1800.0, 1500, 1200, 1000 })
+        {
+            var p = DockFit.Plan(avail, Kasa, Overhead);
+            if (p.Hidden.Count < DockFit.HideOrder.Length) Assert.True(p.Scale >= DockFit.MinScale - 1e-9, $"{avail}: {p.Scale}");
+        }
+    }
+}

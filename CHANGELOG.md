@@ -1,5 +1,13 @@
 # Değişiklik günlüğü
 
+## 1.6.9 (2026-11-17)
+- Dock bulunduğu ekrana sığar (`DockFit`): 1.6.8'de ikinci ekranda (1920 px, 96 dpi) 2015 px'lik şerit taşıyordu.
+  Kullanılabilir genişlik = çalışma alanı − 2×8 DIP (o ekranın DPI'siyle). Sığmazsa: orantılı ölçek (≥ %70) → ağ/WARP/
+  disk/CPU-RAM kompakt grup (2 satır, %50) → taşma menüsü "»" (ekran görüntüsü, pil, tepsi, kompakt grup, AI, arama
+  sırasıyla). Saat, ses, uygulamalar, Başlat hep görünür. Sığan ekranda değişiklik yok. Kararlar hata.log'a ("Dock yerleşim").
+- Hover büyütme katmanı şeridin ekranına kırpılır, büyüyen simge kenarda içeri itilir.
+- Testler: Kasa'nın gerçek iki ekranı ve 2015 px şerit, DPI'ya göre kullanılabilir genişlik, kompakt grup ve taşma.
+
 ## 1.6.8 (2026-11-17)
 - Dock fareyi takip eder (çoklu ekran): saklı dock, fare hangi monitörün dış dock kenarına giderse orada belirir
   (MonitorFromPoint, GetDpiForMonitor, Per-Monitor V2 piksel yerleşimi). Ekranlar arası ortak kenar tetiklemez
