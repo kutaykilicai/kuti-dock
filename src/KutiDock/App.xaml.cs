@@ -35,6 +35,7 @@ namespace KutiDock
                 case KutiDock.Mac.Core.Guard.SpawnArg: Shutdown(KutiDock.Mac.Core.Guard.RunSpawner(e.Args)); return;
                 case KutiDock.Mac.Core.Guard.WatchArg: Shutdown(KutiDock.Mac.Core.Guard.RunGuard(e.Args)); return;
                 case "--ses-tani": SesTani(); Shutdown(0); return; // 1.6.6: pencere açmadan ses arayüzü denetimi
+                case "--everything-tani": EverythingTani(e.Args); return; // 1.6.14: pencere açmadan Everything uçtan uca denetimi
                 case "--restore-taskbar": KutiDock.Mac.Core.TaskbarState.Restore(force: true); Shutdown(0); return;
                 case KutiDock.Mac.Core.AutoStart.FallbackArg: KutiDock.Mac.Core.TaskbarState.RestoreIfOrphaned(); Shutdown(0); return;
             }
@@ -70,6 +71,13 @@ namespace KutiDock
                 else if (settings.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
             }
             CreateTray();
+            // 1.6.14: aramadaki Everything anahtarı açıksa Everything dock'la birlikte arka planda (penceresiz) başlar;
+            // açılışı yavaşlatmasın diye 8 sn sonra. Anahtar kapalıysa başlatılmaz.
+            if (EverythingPolicy.StartWithDock(settings.SearchWithEverything))
+                _ = System.Threading.Tasks.Task.Delay(8000).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(async () =>
+                {
+                    if (settings.SearchWithEverything) await KutiDock.Tiles.EverythingLauncher.EnsureRunning(waitForDb: false);
+                })));
         }
 
         /// <summary>Mac dock (Gravitone): akrilik plaka, dalga büyütme, Genie, menü çubuğu, yığınlar, Geri Dönüşüm Kutusu, bekçi.</summary>
@@ -267,6 +275,35 @@ namespace KutiDock
             AppBar.RestoreTaskbar();
             TaskbarRemover.SetEnabled(false);
             base.OnExit(e);
+        }
+
+        /// <summary>
+        /// 1.6.14: dock'un gerçek Everything yolu, pencere açmadan: "ac" (anahtar açık: başlat + veritabanı + IPC arama),
+        /// "kapat" (anahtar kapalı: yalnızca dock'un başlattığını kapat). Sonuç %TEMP%\kutidock-everything-tani.txt.
+        /// </summary>
+        async void EverythingTani(string[] args)
+        {
+            var sb = new System.Text.StringBuilder();
+            string mode = args.Length > 1 ? args[1] : "ac", q = args.Length > 2 ? args[2] : "kutay";
+            try
+            {
+                if (mode == "kapat") { KutiDock.Tiles.EverythingLauncher.StopIfStartedByDock(); sb.AppendLine("kapat: istendi"); }
+                else
+                {
+                    sb.AppendLine("calisiyordu: " + KutiDock.Tiles.EverythingClient.Running);
+                    var t = System.Diagnostics.Stopwatch.StartNew();
+                    bool ok = await KutiDock.Tiles.EverythingLauncher.EnsureRunning();
+                    sb.AppendLine($"hazir: {ok} ({t.ElapsedMilliseconds} ms), db: {KutiDock.Tiles.EverythingLauncher.DbLoaded()}, pencere acik: {KutiDock.Tiles.EverythingLauncher.MainWindowVisible()}");
+                    using var c = new KutiDock.Tiles.EverythingClient();
+                    var roots = KutiDock.Tiles.WindowsSearch.UserRoots();
+                    var hits = await c.Search(WinSearch.EverythingQuery(q, roots), 40);
+                    var files = hits?.Where(h => WinSearch.AllowedFile(h.FullPath, roots)).Take(8).ToList();
+                    sb.AppendLine($"arama '{q}': {(hits == null ? "yanit yok" : hits.Count + " sonuc, gosterilecek " + files.Count)}");
+                }
+            }
+            catch (Exception ex) { sb.AppendLine("HATA: " + ex.GetType().Name + " " + ex.Message); }
+            try { File.WriteAllText(Path.Combine(Path.GetTempPath(), "kutidock-everything-tani.txt"), sb.ToString()); } catch (Exception) { }
+            Shutdown(0);
         }
 
         static void SesTani()

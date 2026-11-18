@@ -1,5 +1,24 @@
 # Değişiklik günlüğü
 
+## 1.6.14 (2026-11-18)
+- "Aramada Everything kullan" anahtarı artık Everything'i kendisi yönetir; Everything'i elle açmak gerekmez.
+  Önceki sorunlar: Everything yalnızca arama paneli açılınca başlatılıyordu; veritabanı yüklenmeden yapılan
+  aramalar boş dönüyor ve yeniden denenmiyordu; ayarlardaki anahtar Everything'i başlatıp kapatmıyordu; dock'un
+  başlattığı Everything yalnızca bellekte tutulduğu için dock yeniden başlayınca anahtar kapatılsa da açık kalıyordu.
+- Anahtar açılınca Everything arka planda, pencere açmadan (`-startup`) başlar. Anahtar açıkken dock her açılışta
+  (8 sn sonra) Everything'i yine başlatır; kapalıyken başlatmaz. Arama sırası değişmedi: uygulamalar, ayarlar,
+  Everything'den dosyalar.
+- Everything çalışmıyorsa arama onu başlatıp IPC penceresini (en çok 8 sn) ve veritabanını (en çok 20 sn) bekler.
+  Veritabanı hazır değilse "Everything veritabanı yükleniyor…" yazar ve aramayı 0,4 / 0,8 / 1,5 / 3 / 5 sn sonra
+  kendiliğinden yeniler.
+- Anahtar kapatılınca yalnızca dock'un başlattığı Everything kapatılır (`Everything.exe -exit`). Kimin başlattığı
+  `%APPDATA%\KutiDock\everything-dock.txt` dosyasında (süreç no + başlama zamanı) tutulur; dock yeniden başlasa
+  da geçerlidir. Elle açılan Everything ya da ana penceresi açık olan Everything kapatılmaz. Everything hizmeti
+  (servis) hiç ellenmez.
+- Tanı modu: `KutiDock.exe --everything-tani ac|kapat` (pencere açmaz, sonucu `%TEMP%\kutidock-everything-tani.txt`'e
+  yazar). İşlemler hata.log'a ("Everything: ...").
+- Testler: dock açılışında başlatma kararı, sahiplik dosyası, yalnızca dock'un başlattığı süreci kapatma, yeniden deneme kararı.
+
 ## 1.6.13 (2026-11-18)
 - Çalışan bir uygulamanın simgesine sağ tıklayınca menünün en altında kırmızı **Görevi sonlandır**. Onay sormaz;
   donmuş uygulamada da çalışır, Görev Yöneticisi'ni açmak gerekmez. Simgenin pencerelerinin sahibi süreçler ve aynı

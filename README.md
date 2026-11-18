@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.13**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.14**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.14** "Aramada Everything kullan" açıkken Everything arka planda kendiliğinden başlar, aramalar onu kullanır; kapatınca dock'un açtığı Everything kapanır.
 - **1.6.13** Simgeye sağ tıklayınca "Görevi sonlandır": donmuş uygulamayı onaysız, alt süreçleriyle kapatır (PWA'da yalnızca pencere).
 - **1.6.12** TV Aç-Kapat simgesi TV'nin açık mı kapalı mı olduğunu gösterir (yeşil nokta / gri simge ve "kapalı" rozeti).
 - **1.6.11** Arama panelinde Everything anahtarı (gerekirse Everything'i arka planda başlatır). WARP'a dock'tan bağlanınca uygulaması da başlar.

@@ -99,7 +99,12 @@ namespace KutiDock
             beh.Children.Add(Toggle("Tam ekran oyun/videoda dock'u gizle", _s.HideOnFullscreen, v => _s.HideOnFullscreen = v));
             beh.Children.Add(Toggle("Windows görev çubuğunu otomatik gizle (çıkınca geri gelir)", _s.AutoHideWindowsTaskbar, v => _s.AutoHideWindowsTaskbar = v));
             beh.Children.Add(Toggle("Windows görev çubuğunu tamamen kaldır (dock kapanınca/çökünce geri gelir)", _s.RemoveWindowsTaskbar, v => _s.RemoveWindowsTaskbar = v));
-            beh.Children.Add(Toggle("Aramada Everything kullan (kapalıyken Windows araması gibi)", _s.SearchWithEverything, v => _s.SearchWithEverything = v));
+            beh.Children.Add(Toggle("Aramada Everything kullan (kapalıyken Windows araması gibi)", _s.SearchWithEverything, v =>
+            {
+                _s.SearchWithEverything = v;
+                // 1.6.14: aramadaki anahtarla aynı: açılınca arka planda başlat, kapanınca dock'un başlattığını kapat
+                if (v) _ = KutiDock.Tiles.EverythingLauncher.EnsureRunning(waitForDb: false); else KutiDock.Tiles.EverythingLauncher.StopIfStartedByDock();
+            }));
             beh.Children.Add(Toggle("macOS büyütmesi (simgeler imlecin çevresinde büyür)", _s.Magnification, v => _s.Magnification = v));
             beh.Children.Add(Toggle("Animasyonlar (açılış sıçraması, açılma/kapanma)", _s.Animations, v => _s.Animations = v));
 

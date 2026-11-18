@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -182,7 +183,7 @@ namespace KutiDock.Tiles
                 CornerRadius = new CornerRadius(12), Padding = new Thickness(8), Child = stack,
             };
 
-            _box.TextChanged += (_, _) => { _typing.Stop(); _typing.Start(); };
+            _box.TextChanged += (_, _) => { _retry = 0; _typing.Stop(); _typing.Start(); };
             _typing.Tick += (_, _) => { _typing.Stop(); Search(); };
             PreviewKeyDown += Keys;
             Deactivated += (_, _) => { if (!_closing) Close(); };
@@ -205,12 +206,14 @@ namespace KutiDock.Tiles
 
         async void StartEverything()
         {
-            _status.Text = "Everything başlatılıyor…";
+            _status.Text = "Everything arka planda başlatılıyor…";
             bool ok = await EverythingLauncher.EnsureRunning();
             if (_closing || !_everything) return;
             if (!ok) { _status.Text = "Everything bulunamadı ya da başlatılamadı."; return; }
             Search();
         }
+
+        int _retry;
 
         async void Search()
         {
@@ -228,9 +231,21 @@ namespace KutiDock.Tiles
             if (_everything)
             {
                 var roots = WindowsSearch.UserRoots();
+                if (!EverythingClient.Running) { StartEverything(); return; } // 1.6.14: kapanmışsa yeniden arka planda başlat
                 var hits = await _ev.Search(WinSearch.EverythingQuery(q, roots), 40);
                 if (seq != _seq) return;
-                if (hits == null) { if (apps.Count + settings.Count == 0) { _list.Items.Clear(); } _status.Text = "Everything çalışmıyor."; return; }
+                if (hits == null) { if (apps.Count + settings.Count == 0) { _list.Items.Clear(); } _status.Text = "Everything yanıt vermedi."; return; }
+                // 1.6.14: veritabanı henüz yükleniyorsa kısa bekleyip aramayı kendiliğinden yenile
+                bool loaded = EverythingLauncher.DbLoaded();
+                if (EverythingPolicy.ShouldRetry(loaded, hits.Count, _retry))
+                {
+                    if (noApp == null) _status.Text = "Everything veritabanı yükleniyor…";
+                    int delay = EverythingPolicy.RetryDelaysMs[_retry++];
+                    await Task.Delay(delay);
+                    if (seq == _seq && !_closing) Search();
+                    return;
+                }
+                _retry = 0;
                 files = hits.Select(h => new QuickHit(HitKind.File, h.Name, h.Folder, h.FullPath))
                     .Where(h => WinSearch.AllowedFile(h.Target, roots)).Take(8).ToList();
             }
@@ -319,36 +334,110 @@ namespace KutiDock.Tiles
         }
     }
 
-    /// <summary>1.6.11: Everything'i arka planda (-startup: tepside, penceresiz) başlatır; yalnızca kendi başlattığını kapatır.</summary>
+    /// <summary>
+    /// Everything'i arka planda (-startup: pencere açmadan) başlatır ve veritabanı yüklenene kadar bekler. 1.6.14: dock'un
+    /// başlattığı süreç everything-dock.txt'ye yazılır; dock yeniden başlasa da anahtar kapatılınca yalnızca o süreç
+    /// "-exit" ile kapanır. Kutay'ın kendi açtığı ya da penceresi açık Everything'e dokunulmaz.
+    /// </summary>
     internal static class EverythingLauncher
     {
-        static bool _startedByDock;
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string name);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, int msg, IntPtr w, IntPtr l, int flags, int timeout, out IntPtr result);
+        static readonly SemaphoreSlim _gate = new(1, 1);
 
         static string Exe => EverythingIpc.FindExe(System.IO.File.Exists,
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+        static string OwnerPath => System.IO.Path.Combine(Services.DataDir, EverythingPolicy.OwnerFile);
 
-        public static async Task<bool> EnsureRunning()
+        /// <summary>Everything'in veritabanı yüklü mü (EVERYTHING_IPC_IS_DB_LOADED). Everything yoksa ya da yanıt vermezse false.</summary>
+        public static bool DbLoaded()
         {
-            if (EverythingClient.Running) return true;
-            var exe = Exe;
-            if (exe == null) return false;
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, EverythingIpc.StartArgs) { UseShellExecute = false, CreateNoWindow = true })?.Dispose();
-                _startedByDock = true;
-            }
-            catch (Exception) { return false; }
-            for (int i = 0; i < 50 && !EverythingClient.Running; i++) await Task.Delay(100);
-            return EverythingClient.Running;
+            var h = FindWindow(EverythingIpc.WindowClass, null);
+            if (h == IntPtr.Zero) return false;
+            return SendMessageTimeout(h, EverythingPolicy.WmUser, new IntPtr(EverythingPolicy.IpcIsDbLoaded), IntPtr.Zero, 0x2 /* SMTO_ABORTIFHUNG */, 1000, out var r) != IntPtr.Zero
+                && r != IntPtr.Zero;
         }
 
+        /// <summary>Everything'in arama penceresi açık mı (Kutay kullanıyor).</summary>
+        public static bool MainWindowVisible()
+        {
+            var h = FindWindow("EVERYTHING", null);
+            return h != IntPtr.Zero && IsWindowVisible(h);
+        }
+
+        /// <summary>Çalışmıyorsa penceresiz başlatır; IPC penceresi ve (en çok 20 sn) veritabanı için bekler.</summary>
+        public static async Task<bool> EnsureRunning(bool waitForDb = true)
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                if (!EverythingClient.Running)
+                {
+                    var exe = Exe;
+                    if (exe == null) { Trace("bulunamadı (Program Files\\Everything\\Everything.exe yok)"); return false; }
+                    try
+                    {
+                        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, EverythingIpc.StartArgs) { UseShellExecute = false, CreateNoWindow = true });
+                        if (p != null)
+                        {
+                            System.IO.Directory.CreateDirectory(Services.DataDir);
+                            System.IO.File.WriteAllText(OwnerPath, new OwnedEverything(p.Id, p.StartTime.ToUniversalTime()).Serialize());
+                            Trace($"arka planda başlatıldı (pid {p.Id})");
+                        }
+                    }
+                    catch (Exception ex) { Trace("başlatılamadı: " + ex.Message); return false; }
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    while (!EverythingClient.Running && sw.Elapsed < EverythingPolicy.WindowWait) await Task.Delay(100);
+                    if (!EverythingClient.Running) { Trace("başlatıldı ama IPC penceresi gelmedi"); return false; }
+                }
+                if (waitForDb)
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    while (!DbLoaded() && sw.Elapsed < EverythingPolicy.DbWait) await Task.Delay(200);
+                    if (!DbLoaded()) Trace("veritabanı 20 sn'de yüklenmedi; arama yine de denenecek");
+                }
+                return true;
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>Anahtar kapatılınca: yalnızca dock'un başlattığı ve penceresi kapalı Everything "-exit" ile kapanır.</summary>
         public static void StopIfStartedByDock()
         {
-            if (!_startedByDock) return;
-            _startedByDock = false;
+            OwnedEverything owned = null;
+            try { if (System.IO.File.Exists(OwnerPath)) owned = OwnedEverything.Parse(System.IO.File.ReadAllText(OwnerPath)); } catch (Exception) { }
+            if (owned == null) { Trace("kapatılmadı: dock başlatmamış (Kutay'ın kendi açtığı ya da çalışmıyor)"); return; }
+            int? pid = null; DateTime? start = null;
+            try
+            {
+                using var p = System.Diagnostics.Process.GetProcessById(owned.Pid);
+                if (p.ProcessName.Equals("Everything", StringComparison.OrdinalIgnoreCase)) { pid = p.Id; start = p.StartTime.ToUniversalTime(); }
+            }
+            catch (Exception) { }
+            bool window = MainWindowVisible();
+            if (!EverythingPolicy.ShouldExit(owned, pid, start, window))
+            {
+                Trace(window && pid != null ? "kapatılmadı: Everything penceresi açık (kullanılıyor)" : "kapatılmadı: dock'un başlattığı süreç artık çalışmıyor");
+                if (!(window && pid != null)) TryDelete();
+                return;
+            }
             var exe = Exe;
             if (exe == null) return;
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, EverythingIpc.ExitArgs) { UseShellExecute = false, CreateNoWindow = true })?.Dispose(); }
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, EverythingIpc.ExitArgs) { UseShellExecute = false, CreateNoWindow = true })?.Dispose();
+                Trace($"anahtar kapatıldı: dock'un başlattığı Everything kapatıldı (pid {owned.Pid})");
+            }
+            catch (Exception ex) { Trace("kapatılamadı: " + ex.Message); }
+            TryDelete();
+        }
+
+        static void TryDelete() { try { System.IO.File.Delete(OwnerPath); } catch (Exception) { } }
+
+        static void Trace(string line)
+        {
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Everything: {line}\n"); }
             catch (Exception) { }
         }
     }

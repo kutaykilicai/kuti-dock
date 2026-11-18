@@ -13,7 +13,7 @@
     <Company>Kutay Kılıç</Company>
     <Product>Kuti Dock</Product>
     <Copyright>© 2026 Kutay Kılıç · MIT</Copyright>
-    <Version>1.6.13</Version>
+    <Version>1.6.14</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
