@@ -92,6 +92,32 @@ public static class FullscreenRule
 }
 
 /// <summary>
+/// 1.6.18: üstteki menü çubuğunun tam ekran kararı, monitör başına. Eskiden yalnızca Explorer'ın ABN_FULLSCREENAPP
+/// bildirimine bakılıyordu; bildirim geldiği anda oyun henüz öne/o monitöre geçmemişse yok sayılıyordu ve Explorer
+/// bir daha göndermediği için çubuk oyunun üstünde kalıyordu (Marvel Rivals; Alt+Enter yeni bildirim üretip düzeltiyordu).
+/// </summary>
+public static class MenuBarFullscreen
+{
+    /// <param name="explorerFullscreen">Explorer'ın son ABN_FULLSCREENAPP değeri (saklanır, yok sayılmaz).</param>
+    /// <param name="singleMonitor">Tek monitör: Explorer'ın bildirimine güvenilir (uygulama henüz önde olmayabilir).</param>
+    /// <param name="foregroundCoversBarMonitor">Ön plan penceresi çubuğun monitörünü kaplıyor (<see cref="FullscreenRule.HidesDock"/>).</param>
+    /// <param name="foregroundIsDesktop">Ön plan masaüstü (Progman/WorkerW): Explorer bazen onu tam ekran sayar.</param>
+    /// <remarks>
+    /// Birden çok monitörde bildirim hangi monitör için olduğunu söylemez; yalnızca yeniden bakma tetikleyicisidir.
+    /// Karar geometriden verilir, böylece oyun hangi monitördeyse yalnızca oradaki çubuk gizlenir.
+    /// </remarks>
+    public static bool Hides(bool explorerFullscreen, bool singleMonitor, bool foregroundCoversBarMonitor, bool foregroundIsDesktop)
+    {
+        if (foregroundIsDesktop) return false;
+        if (foregroundCoversBarMonitor) return true;
+        return explorerFullscreen && singleMonitor;
+    }
+
+    /// <summary>Ön plan değişince ya da bildirim gelince kısa yoklama: oyun penceresi açılıp sonra tam ekrana geçebilir.</summary>
+    public static readonly TimeSpan BurstLength = TimeSpan.FromSeconds(10), BurstInterval = TimeSpan.FromMilliseconds(500);
+}
+
+/// <summary>
 /// Durum değişikliğini art arda yeterince kez aynı görüldüğünde kabul eder (titreşmeyi önler).
 /// true'ya geçiş <c>onTicks</c>, false'a dönüş <c>offTicks</c> gözlem ister.
 /// </summary>

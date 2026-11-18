@@ -47,6 +47,7 @@ internal sealed class MenuBarWindow : Window
     uint _taskbarCreatedMessage;
     uint _explorerPid;
     bool _fullscreen;
+    bool _explorerFullscreen; // 1.6.18: Explorer'ın son ABN_FULLSCREENAPP değeri
     bool _startOpenAtPress;
     bool _placePending;
     IntPtr _placedMonitor;
@@ -232,6 +233,7 @@ internal sealed class MenuBarWindow : Window
                 return MA_NOACTIVATE;
             case WM_DISPLAYCHANGE:
                 SchedulePlace(forget: true);
+                _owner.ScheduleFullscreenCheck(burst: true); // özel tam ekran oyun çözünürlüğü değiştirir
                 return IntPtr.Zero;
             case WM_WINDOWPOSCHANGED:
                 _appBar?.NotifyWindowPosChanged();
@@ -256,19 +258,53 @@ internal sealed class MenuBarWindow : Window
                     SchedulePlace();
                     break;
                 case ABN_FULLSCREENAPP:
-                    OnFullscreenApp(lParam != IntPtr.Zero);
+                    // 1.6.18: bildirim artık yok sayılmaz; saklanır ve oyun öne/tam ekrana geçene dek kısa süre yeniden bakılır.
+                    _explorerFullscreen = lParam != IntPtr.Zero;
+                    UpdateFullscreen();
+                    _owner.ScheduleFullscreenCheck(burst: true);
                     break;
             }
         }
         return IntPtr.Zero;
     }
 
-    /// <summary>Step aside while a full-screen app (video, game, presentation) is in front on this monitor.</summary>
-    void OnFullscreenApp(bool fullscreen)
+    /// <summary>
+    /// 1.6.18: bu monitörde tam ekran uygulama (oyun, video, sunum) önde mi; öyleyse çubuk gizlenir ve topmost'tan
+    /// çekilir. <see cref="MenuBars"/> ön plan değişince, ön plan penceresi boyut/konum değiştirince ve kısa
+    /// yoklamada çağırır. Karar Core'da (<see cref="KutiDock.Core.MenuBarFullscreen"/>).
+    /// </summary>
+    public void UpdateFullscreen()
     {
-        if (fullscreen && !Displays.IsFullscreenAppOn(_hwnd)) return;
+        if (_hwnd == IntPtr.Zero) return;
+        var monitor = _placedMonitor != IntPtr.Zero ? _placedMonitor : MonitorFromWindow(_hwnd, MONITOR_DEFAULTTONEAREST);
+        var fg = GetForegroundWindow();
+        string cls = fg != IntPtr.Zero ? GetClassName(fg) : "";
+        bool desktop = cls is "Progman" or "WorkerW";
+        bool single = GetSystemMetrics(SM_CMONITORS) <= 1;
+        SetFullscreen(KutiDock.Core.MenuBarFullscreen.Hides(_explorerFullscreen, single, Covers(fg, cls, monitor), desktop));
+    }
+
+    /// <summary>Ön plan penceresi bu monitörü tamamen kaplıyor mu (çerçevesiz/özel tam ekran; başlıklı büyütülmüş pencere değil).</summary>
+    static bool Covers(IntPtr fg, string cls, IntPtr monitor)
+    {
+        if (fg == IntPtr.Zero || monitor == IntPtr.Zero || !IsWindowVisible(fg) || IsCloaked(fg)) return false;
+        if (MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST) != monitor) return false;
+        GetWindowThreadProcessId(fg, out uint pid);
+        if (pid == Environment.ProcessId) return false; // dock'un kendi pencereleri (Genie, menüler)
+        var info = new MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+        if (!GetWindowRect(fg, out var r) || !GetMonitorInfo(monitor, ref info)) return false;
+        var m = info.rcMonitor;
+        var mon = new KutiDock.Core.Box(m.Left, m.Top, m.Right, m.Bottom);
+        bool caption = ((long)GetWindowLongPtr(fg, GWL_STYLE) & WS_CAPTION) == WS_CAPTION;
+        return KutiDock.Core.FullscreenRule.HidesDock(new KutiDock.Core.Box(r.Left, r.Top, r.Right, r.Bottom), mon, mon, IsZoomed(fg), cls, caption);
+    }
+
+    /// <summary>Step aside while a full-screen app (video, game, presentation) is in front on this monitor.</summary>
+    void SetFullscreen(bool fullscreen)
+    {
         if (_fullscreen == fullscreen) return;
         _fullscreen = fullscreen;
+        Log.Info($"Menu bar {_device}: {(fullscreen ? "hidden (full-screen app)" : "shown")}");
         if (fullscreen)
         {
             ShowWindow(_hwnd, SW_HIDE);

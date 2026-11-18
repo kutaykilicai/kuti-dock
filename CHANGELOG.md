@@ -1,5 +1,21 @@
 # Değişiklik günlüğü
 
+## 1.6.18 (2026-11-19)
+- Üstteki menü çubuğu tam ekran oyunun (Marvel Rivals) üstünde kalmaz. Kök neden: çubuk tam ekranı yalnızca Explorer'ın
+  `ABN_FULLSCREENAPP` bildiriminden öğreniyordu. Kasa'da iki monitör olduğu için bildirim, ön plan penceresi çubuğun
+  monitöründe değilse yok sayılıyordu. Oyun açılırken bildirim, oyun penceresi henüz öne ya da tam ekrana geçmeden
+  geliyor, yok sayılıyor ve Explorer tekrar göndermiyordu; çubuk topmost olduğu için oyunun üstünde kalıyordu.
+  Alt+Enter yeni bir bildirim ürettiği için düzeliyordu. Klasik dock 250 ms'lik kendi yoklamasıyla zaten gizleniyordu.
+- Çubuk artık tam ekranı kendisi de izler: ön plan değişince, ön plan penceresi boyut/konum değiştirince (yalnızca o
+  sürecin `EVENT_OBJECT_LOCATIONCHANGE` olayı), ekran ayarı değişince ve Explorer bildirimi gelince bakar; bunların her
+  birinden sonra 10 sn boyunca 500 ms'de bir kısa kontrol yapar, sonra durur. Sürekli yoklama yok.
+- Karar monitör başına: ön plan penceresi çubuğun monitörünü tamamen kaplıyorsa (görünür, gizlenmemiş/cloaked değil,
+  başlık çubuklu büyütülmüş pencere değil, masaüstü değil) yalnızca o monitörün çubuğu gizlenir ve topmost'tan çekilir;
+  diğer monitördeki çubuk görünür kalır. Tek monitörde Explorer bildirimine eskisi gibi güvenilir. Gizlenme/görünme
+  `log.txt`'ye yazılır ("Menu bar \\.\DISPLAY1: hidden (full-screen app)").
+- Testler: kaçırılan bildirimde geometriyle gizleme, monitör başına karar, eski bildirimin diğer monitörü gizlememesi,
+  tek monitör ve masaüstü, başlıklı büyütülmüş pencere, kısa yoklama süresi.
+
 ## 1.6.17 (2026-11-18)
 - Lively duvar kağıtları kaybolunca kendiliğinden geri gelir. Kök neden (Kasa, Lively günlüğü): Kuti Dock Windows
   görev çubuğunun yerini aldığı için `Shell_TrayWnd` penceresinin sahibi dock'tur. Dock her yeniden başladığında Lively

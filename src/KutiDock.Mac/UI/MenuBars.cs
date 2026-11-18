@@ -30,6 +30,14 @@ internal sealed class MenuBars : IDisposable
     readonly List<MenuBarWindow> _bars = [];
     AppMenus? _menus; // 1.6.6: öndeki uygulamanın menüleri
     IntPtr _foregroundHook;
+    // 1.6.18: tam ekran izleme. Ön plan değişince ve ön plan penceresi boyut/konum değiştirince (yalnızca o sürecin
+    // EVENT_OBJECT_LOCATIONCHANGE'i) bakılır; ayrıca 10 sn boyunca 500 ms'de bir (oyun önce pencere açıp sonra tam ekrana geçer).
+    readonly WinEventProc _locationProc;
+    readonly DispatcherTimer _fullscreenTimer = new() { Interval = KutiDock.Core.MenuBarFullscreen.BurstInterval };
+    IntPtr _locationHook;
+    uint _locationPid;
+    DateTime _burstUntil;
+    bool _fullscreenCheckPending;
     bool _allDisplays;
     string _barsKey = "";
     bool _disposed;
@@ -43,14 +51,26 @@ internal sealed class MenuBars : IDisposable
         _clockTimer.Tick += (_, _) => UpdateClock();
         _winEventProc = (_, _, hwnd, idObject, _, _, _) =>
         {
-            if (idObject == OBJID_WINDOW) UpdateActiveApp(hwnd);
+            if (idObject != OBJID_WINDOW) return;
+            UpdateActiveApp(hwnd);
+            WatchForeground(hwnd);
         };
         _foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
             _winEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+        _locationProc = (_, _, hwnd, idObject, idChild, _, _) =>
+        {
+            if (idObject == OBJID_WINDOW && idChild == 0 && hwnd == GetForegroundWindow()) ScheduleFullscreenCheck(burst: false);
+        };
+        _fullscreenTimer.Tick += (_, _) =>
+        {
+            CheckFullscreen();
+            if (DateTime.UtcNow >= _burstUntil) _fullscreenTimer.Stop();
+        };
         AppName = "";
         UpdateActiveApp(GetForegroundWindow());
         Sync();
         UpdateClock();
+        WatchForeground(GetForegroundWindow());
     }
 
     public string AppName { get; private set; }
@@ -92,9 +112,53 @@ internal sealed class MenuBars : IDisposable
             if (_menus != null) bar.ShowMenus(_menus);
         }
         Log.Info($"Menu bar on {_bars.Count} displays");
+        ScheduleFullscreenCheck(burst: false); // yeni çubuklar oyun açıkken oluşmuş olabilir
     }
 
     public void ApplyTheme() => _bars.ForEach(b => b.ApplyTheme());
+
+    /// <summary>1.6.18: yeni ön plan penceresinin sürecini izler ve kısa yoklamayı başlatır.</summary>
+    void WatchForeground(IntPtr foreground)
+    {
+        if (_disposed) return;
+        uint pid = 0;
+        if (foreground != IntPtr.Zero) GetWindowThreadProcessId(foreground, out pid);
+        if (pid == Environment.ProcessId) pid = 0; // kendi pencerelerimiz
+        if (pid != _locationPid)
+        {
+            if (_locationHook != IntPtr.Zero) UnhookWinEvent(_locationHook);
+            _locationHook = IntPtr.Zero;
+            _locationPid = pid;
+            if (pid != 0)
+                _locationHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero,
+                    _locationProc, pid, 0, WINEVENT_OUTOFCONTEXT);
+        }
+        ScheduleFullscreenCheck(burst: true);
+    }
+
+    /// <summary>Tam ekran kararını (aynı anda gelen olaylar tek seferde) yeniden verir; <paramref name="burst"/> ise 10 sn yoklar.</summary>
+    public void ScheduleFullscreenCheck(bool burst)
+    {
+        if (_disposed) return;
+        if (burst)
+        {
+            _burstUntil = DateTime.UtcNow + KutiDock.Core.MenuBarFullscreen.BurstLength;
+            if (!_fullscreenTimer.IsEnabled) _fullscreenTimer.Start();
+        }
+        if (_fullscreenCheckPending) return;
+        _fullscreenCheckPending = true;
+        _clockTimer.Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            _fullscreenCheckPending = false;
+            CheckFullscreen();
+        });
+    }
+
+    void CheckFullscreen()
+    {
+        if (_disposed) return;
+        foreach (var bar in _bars) bar.UpdateFullscreen();
+    }
 
     /// <summary>Back from sleep, lock or a user switch: everything may be stale.</summary>
     public void Refresh()
@@ -131,6 +195,9 @@ internal sealed class MenuBars : IDisposable
         _clockTimer.Stop();
         if (_foregroundHook != IntPtr.Zero) UnhookWinEvent(_foregroundHook);
         _foregroundHook = IntPtr.Zero;
+        _fullscreenTimer.Stop();
+        if (_locationHook != IntPtr.Zero) UnhookWinEvent(_locationHook);
+        _locationHook = IntPtr.Zero;
         foreach (var bar in _bars) bar.Close();
         _bars.Clear();
         _status.Dispose();

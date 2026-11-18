@@ -92,6 +92,12 @@ internal static partial class NativeMethods
     public const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
     public const uint EVENT_OBJECT_CLOAKED = 0x8017;
     public const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
+    public const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B; // 1.6.18: ön plan penceresinin boyut/konum değişimi
+    public const int SM_CMONITORS = 80;
+    public const long WS_CAPTION = 0x00C00000;
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int index);
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     public const int OBJID_WINDOW = 0;
