@@ -14,6 +14,7 @@ namespace KutiDock
     {
         static Mutex _single;
         Services _services;
+        WallpaperGuard _wallpaperGuard;
         DockWindow _dock, _dockRight;           // Kuti widget şeridi (Mac dock açıkken altta sol ve sağ grup)
         KutiDock.Mac.UI.DockWindow _mac;         // Gravitone motoru: macOS dock + menü çubuğu
         KutiDock.Mac.Core.DockConfig _macConfig;
@@ -71,6 +72,8 @@ namespace KutiDock
                 else if (settings.AutoHideWindowsTaskbar) AppBar.SetTaskbarAutoHide(true);
             }
             CreateTray();
+            // 1.6.17: Lively duvar kağıtları kaybolursa pencere açmadan geri yükle (tam ekran oyunda asla).
+            _wallpaperGuard = new WallpaperGuard(Dispatcher); _wallpaperGuard.Start();
             // 1.6.14: aramadaki Everything anahtarı açıksa Everything dock'la birlikte arka planda (penceresiz) başlar;
             // açılışı yavaşlatmasın diye 8 sn sonra. Anahtar kapalıysa başlatılmaz.
             if (EverythingPolicy.StartWithDock(settings.SearchWithEverything))

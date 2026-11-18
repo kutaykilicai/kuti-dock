@@ -1,5 +1,18 @@
 # Değişiklik günlüğü
 
+## 1.6.17 (2026-11-18)
+- Lively duvar kağıtları kaybolunca kendiliğinden geri gelir. Kök neden (Kasa, Lively günlüğü): Kuti Dock Windows
+  görev çubuğunun yerini aldığı için `Shell_TrayWnd` penceresinin sahibi dock'tur. Dock her yeniden başladığında Lively
+  "Explorer çöktü (pid uyuşmazlığı)" sanıp duvar kağıtlarını yeniden kurar; 30 sn içinde ikinci kez olunca ("Explorer
+  restarted multiple times in the last 30s") vazgeçer, oynatıcıları kapatır ve `WallpaperLayout.json`'u boşaltır.
+  18 Kasım 14:01'de 28 sn arayla iki dock yeniden başlatması bunu tetikledi; inFamous 2 değildi.
+- Yeni duvar kağıdı bekçisi: dock açılışından 40 sn sonra, her ekran ayarı değişikliğinden (çözünürlük, monitör,
+  oyunun mod değiştirmesi) 5 sn sonra ve 2 dakikada bir hafif bir kontrol yapar: Lively çalışıyor mu, düzen boş mu,
+  düzendeki kadar Lively oynatıcısı (mpv) var mı. Eksikse `LivelyGeriYukle.ps1 -Mod Kontrol` pencere açmadan çalışır
+  (en sık 2 dakikada bir). Ön planda tam ekran oyun/uygulama varsa hiçbir şey yapılmaz; Lively kapalıysa dokunulmaz.
+  Kararlar hata.log'a ("Duvar kağıdı bekçisi: ...").
+- Testler: düzen sayısı okuma, eksiklik kararı, tam ekranda/Lively kapalıyken/betik yokken çalışmama, en sık 2 dakikada bir, gecikmeler.
+
 ## 1.6.16 (2026-11-18)
 - Limit panelindeki Gemini satırı artık gemini.google.com/usage sayfasındaki iki kartı gösterir: **Güncel** (yüzde,
   çubuk ve sıfırlanma saati) ve **Haftalık** (yüzde, çubuk ve sıfırlanma günü/saati), altında "güncellendi SS:dd ·
