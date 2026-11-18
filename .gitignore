@@ -8,3 +8,6 @@ rea/*.png
 rea/*.json
 rea/*.log
 mock/bg.png
+
+# Kuti Dock Gemini eklentisinin gizli değeri (dock yazar)
+extensions/gemini-usage/dock-gizli.json

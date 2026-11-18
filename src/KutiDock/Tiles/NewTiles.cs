@@ -87,6 +87,7 @@ namespace KutiDock.Tiles
             ToolTip = "Tıkla: Cursor ve diğer yapay zekâ limitleri";
             OnClick(ShowCursor);
             S.Balances.Changed += OnBalances;
+            S.Gemini.Changed += OnBalances;
         }
 
         public override void Refresh()
@@ -192,13 +193,57 @@ namespace KutiDock.Tiles
                 var link = new Border { Child = Ui.Text("Sayfayı aç", 11, Theme.Accent), Cursor = Cursors.Hand, Background = Brushes.Transparent, Margin = new Thickness(10, 0, 0, 0) };
                 link.MouseLeftButtonUp += (_, e) => { _popup.IsOpen = false; Run(url); e.Handled = true; };
                 DockPanel.SetDock(link, Dock.Right); bottom.Children.Add(link);
-                var st = Ui.Text(pv == AiProvider.Gemini ? AiBalances.GeminiNote : AiBalances.Status(b, now), 11,
-                    b?.Note == "güncellenemedi" ? Theme.Orange : dim);
+                if (pv == AiProvider.Gemini) { GeminiRows(row, bottom, link, now); list.Children.Add(row); continue; }
+                var st = Ui.Text(AiBalances.Status(b, now), 11, b?.Note == "güncellenemedi" ? Theme.Orange : dim);
                 st.TextTrimming = TextTrimming.CharacterEllipsis; st.MaxWidth = 250; st.ToolTip = st.Text;
                 bottom.Children.Add(st);
                 row.Children.Add(bottom);
                 list.Children.Add(row);
             }
+        }
+
+        /// <summary>
+        /// 1.6.16: Gemini kartları (Kuti Dock Chrome eklentisinden). Satıra tıklanınca eklenti arka planda okuyabiliyorsa
+        /// yenileme istenir; okuyamıyorsa Gemini kullanım sayfası açılır (eklenti sayfadan okur). Veri yoksa değer gösterilmez.
+        /// </summary>
+        void GeminiRows(StackPanel row, DockPanel bottom, Border link, DateTimeOffset now)
+        {
+            var dim = Theme.B("#99F5F5F7");
+            var g = S.Gemini;
+            var d = g.Data;
+            if (d != null)
+            {
+                var local = now.LocalDateTime;
+                foreach (var (name, l) in new[] { ("Güncel", d.Current), ("Haftalık", d.Weekly) })
+                {
+                    var line = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+                    var pct = Ui.Text(l?.Percent is { } v ? "%" + v.ToString("0.#", Format.Tr) : "—", 12, Brushes.White, FontWeights.SemiBold);
+                    DockPanel.SetDock(pct, Dock.Right); line.Children.Add(pct);
+                    var nm = Ui.Text(name, 11, dim); nm.Width = 58; DockPanel.SetDock(nm, Dock.Left); line.Children.Add(nm);
+                    var f = (l?.Percent ?? 0) / 100;
+                    line.Children.Add(new Bar { Height = 5, Value = Format.Clamp01(f), Fill = Color(f), Track = Theme.B("#33FFFFFF"), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+                    row.Children.Add(line);
+                    var rs = GeminiUsage.Line("", l, local).Split(" · ", 2);
+                    if (rs.Length == 2) { var r = Ui.Text(rs[1], 10, dim); r.Margin = new Thickness(58, 0, 0, 0); row.Children.Add(r); }
+                }
+            }
+            string status = g.RefreshRequestedAt is { } rq && now - rq < TimeSpan.FromMinutes(2) && (d == null || d.At < rq) ? "yenileniyor…"
+                : d == null ? "Veri yok · Gemini kullanım sayfasını bir kez aç (eklenti gerekli)"
+                : (GeminiUsage.IsStale(d, now) ? "son güncelleme " : "güncellendi ") + d.At.ToLocalTime().ToString(d.At.Date == now.Date ? "HH:mm" : "d MMM HH:mm", Format.Tr) + " · " + d.Source;
+            var st = Ui.Text(status, 11, d != null && GeminiUsage.IsStale(d, now) ? Theme.Orange : dim);
+            st.TextTrimming = TextTrimming.CharacterEllipsis; st.MaxWidth = 250; st.ToolTip = st.Text;
+            bottom.Children.Add(st);
+            bottom.Margin = new Thickness(0, 4, 0, 0);
+            row.Children.Add(bottom);
+            row.Cursor = Cursors.Hand; row.Background = Brushes.Transparent;
+            row.ToolTip = g.BackgroundOk == true ? "Tıkla: yenile" : "Tıkla: Gemini kullanım sayfasını aç (eklenti oradan okur)";
+            row.MouseLeftButtonUp += (_, e) =>
+            {
+                if (e.Handled) return;
+                e.Handled = true;
+                if (g.RequestRefresh()) { if (_ai != null) FillAi(_ai); }
+                else { _popup.IsOpen = false; Run(AiBalances.PageUrl(AiProvider.Gemini)); }
+            };
         }
 
         static void AddSummary(StackPanel p, UsageSummary u, DateTimeOffset at, DateTimeOffset now)

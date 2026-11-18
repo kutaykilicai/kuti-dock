@@ -1,5 +1,26 @@
 # Değişiklik günlüğü
 
+## 1.6.16 (2026-11-18)
+- Limit panelindeki Gemini satırı artık gemini.google.com/usage sayfasındaki iki kartı gösterir: **Güncel** (yüzde,
+  çubuk ve sıfırlanma saati) ve **Haftalık** (yüzde, çubuk ve sıfırlanma günü/saati), altında "güncellendi SS:dd ·
+  sayfa/arka plan". Veri 30 dakikadan eskiyse turuncu "son güncelleme", hiç veri yoksa "Veri yok" yazar; uydurma
+  değer gösterilmez. Saatler sayfada zaten tarayıcının yerel saatiyle (Kasa: Europe/Istanbul) yazıldığı için çevrilmez.
+- Kaynak: Kutay'ın Chrome'una bir kez yüklenen özgün MV3 eklentisi (`extensions/gemini-usage`). Eklentinin izinleri
+  yalnızca `https://gemini.google.com/usage*` ve `http://127.0.0.1:47615/*`. Sayfa açıkken içerik betiği iki kartın
+  metnini okur (e-posta/ad gibi sayfanın geri kalanı gönderilmez) ve yalnızca dock'a iletir. Çerez, oturum belirteci ya
+  da Chrome profili okunmaz; dock Google'a hiç bağlanmaz.
+- Arka plan: eklenti 10 dakikada bir sayfayı Chrome'un normal isteğiyle ister ve görünür metinde kartları arar.
+  Sayfa kartları JavaScript ile çiziyorsa bu bulunamaz (Gemini `X-Frame-Options: DENY` gönderdiği için gizli iframe
+  de mümkün değil); o durumda değerler Kutay sayfayı açtığında güncellenir.
+- Gemini satırına tıklamak: eklenti arka planda okuyabiliyorsa yenileme ister (eklenti 1 dk içinde alır), okuyamıyorsa
+  Gemini kullanım sayfasını açar. "Sayfayı aç" bağlantısı da duruyor.
+- Dock tarafı: yalnızca 127.0.0.1:47615'i dinleyen küçük yerel uç nokta (`POST /gemini`, `GET /gemini/istek`). Her istek
+  dock'un ürettiği 64 karakterlik gizli değeri (`X-KutiDock-Gizli`) taşımalı; web sayfası kaynaklı istekler reddedilir.
+  Gizli değer `%APPDATA%\KutiDock\gemini-gizli.txt`'de durur, dock onu eklenti klasörüne `dock-gizli.json` olarak yazar
+  (repoda yok). Değerler `gemini-kullanim.json`'da saklanır. hata.log'a yalnızca "Gemini: güncellendi (sayfa)" gibi satırlar.
+- Testler: ekran görüntüsündeki kartlar, sıfır olmayan değerler ve ertesi gün sıfırlanma, Türkçe arayüz, kart yoksa
+  veri yok, satır biçimi, gizli değer karşılaştırma, eskime ve saklama.
+
 ## 1.6.15 (2026-11-18)
 - Limit kutucuğu kapalıyken yine yalnızca Grok Bot haftalık limitini gösterir. Tıklayınca açılan panelde Cursor ve
   Grok Bot satırının altına Apple tarzı gruplu bir "Diğer yapay zekâ" listesi eklendi: AllModels, OpenRouter,

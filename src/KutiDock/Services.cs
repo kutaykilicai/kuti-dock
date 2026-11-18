@@ -34,6 +34,8 @@ namespace KutiDock
         public readonly CursorAccount Cursor = new();
         /// <summary>1.6.15: AllModels / OpenRouter / Kimi bakiyeleri (resmi API'ler, DPAPI'li anahtarlar).</summary>
         public readonly AiBalanceService Balances = new();
+        /// <summary>1.6.16: Gemini kullanım kartları, Kutay'ın Chrome eklentisinden 127.0.0.1 üzerinden.</summary>
+        public readonly GeminiBridge Gemini = new();
 
         /// <summary>
         /// Grok Bot limiti: girişliyse ve son 30 dk'da okunduysa Cursor'dan gelen değer (live = true),
@@ -56,6 +58,7 @@ namespace KutiDock
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("KutiDock/1.0");
             Native.GetSystemTimes(out _i0, out _k0, out _u0);
             _gpu = new PerformanceCounterHelper();
+            Gemini.Start();
         }
 
         DateTime _lastTick;
@@ -161,7 +164,7 @@ namespace KutiDock
             finally { _tierAt = DateTime.Now; _busyTier = false; }
         }
 
-        public void Dispose() { _gpu?.Dispose(); }
+        public void Dispose() { _gpu?.Dispose(); Gemini.Dispose(); }
     }
 
     /// <summary>GPU yükü: Windows "GPU Engine" sayaçlarındaki 3D motorlarının toplamı. Yoksa -1.</summary>

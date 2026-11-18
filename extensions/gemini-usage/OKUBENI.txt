@@ -1,0 +1,13 @@
+Kuti Dock – Gemini kullanımı (Chrome eklentisi)
+
+Ne yapar: gemini.google.com/usage sayfasındaki "Current usage" ve "Weekly limit" kartlarının metnini okur ve
+yalnızca bu PC'deki Kuti Dock'a (http://127.0.0.1:47615) gönderir. Başka hiçbir sunucuya veri gitmez.
+Çerez, şifre ya da oturum okunmaz. İzinler: yalnızca gemini.google.com/usage ve 127.0.0.1:47615.
+
+Yükleme (bir kez):
+1. Chrome adres çubuğuna chrome://extensions yaz ve Enter'a bas.
+2. Sağ üstteki "Geliştirici modu" anahtarını aç.
+3. "Paketlenmemiş öğe yükle"ye tıkla ve bu klasörü seç (Masaüstü\Ai projeler\KutiDock-Gemini-Eklenti).
+
+Sonra Gemini kullanım sayfasını bir kez aç (Kuti Dock panelinde Gemini satırına tıklamak da açar);
+değerler dock'a gelir. dock-gizli.json dosyasını Kuti Dock yazar; silme ve kimseyle paylaşma.
