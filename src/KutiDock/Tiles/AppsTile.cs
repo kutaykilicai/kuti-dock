@@ -8,6 +8,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using Ellipse = System.Windows.Shapes.Ellipse;
 using KutiDock.Core;
 
 namespace KutiDock.Tiles
@@ -34,6 +36,7 @@ namespace KutiDock.Tiles
         sealed class AppItem
         {
             public string Key, Name, Launch, IconPath; public bool Pinned;
+            public string TvTool; public bool? Tv;   // 1.6.12: TV Aç-Kapat kısayolu (TvEkranGecis.exe) ve TV'nin durumu
             public List<IntPtr> Windows = new();
         }
 
@@ -141,6 +144,7 @@ namespace KutiDock.Tiles
                         {
                             Key = AppGrouping.PinnedKey(lnk, target, args, linkAumid), Name = Path.GetFileNameWithoutExtension(lnk),
                             Launch = lnk, IconPath = lnk, Pinned = true,
+                            TvTool = TvStatus.IsTvTool(target) ? target : null,
                         });
                     }
             }
@@ -151,7 +155,9 @@ namespace KutiDock.Tiles
 
         public override void Refresh()
         {
-            var items = Pinned().Select(p => new AppItem { Key = p.Key, Name = p.Name, Launch = p.Launch, IconPath = p.IconPath, Pinned = true }).ToList();
+            var items = Pinned().Select(p => new AppItem { Key = p.Key, Name = p.Name, Launch = p.Launch, IconPath = p.IconPath, Pinned = true, TvTool = p.TvTool }).ToList();
+            // 1.6.12: TV Aç-Kapat simgesi TV'nin açık/kapalı durumunu gösterir (CCD; ekran değişince hemen tazelenir)
+            foreach (var p in items) if (p.TvTool != null) p.Tv = TvDisplay.State(p.TvTool);
             var byKey = items.ToDictionary(i => i.Key, i => i);
             foreach (var h in Native.TaskbarWindows(_self()))
             {
@@ -182,7 +188,8 @@ namespace KutiDock.Tiles
                 if (it.Windows.Count > 0 && _bounce.TryGetValue(it.Key, out var b) && b.IsActive) b.Stop(_clock.Elapsed.TotalSeconds);
             // Görünüm yalnızca liste değişince yeniden kurulur.
             var fg = Native.GetForegroundWindow();
-            var sig = string.Join("|", items.Select(i => i.Key + ":" + i.Windows.Count + (i.Windows.Contains(fg) ? "*" : "")));
+            var sig = string.Join("|", items.Select(i => i.Key + ":" + i.Windows.Count + (i.Windows.Contains(fg) ? "*" : "")
+                + (i.TvTool != null ? "#tv" + (i.Tv?.ToString() ?? "?") : "")));
             if (sig == _signature) { UpdateHandles(items); return; }
             _signature = sig;
             _panel.Children.Clear(); _slots.Clear(); _zoom?.Clear();
@@ -199,7 +206,9 @@ namespace KutiDock.Tiles
         FrameworkElement MakeButton(AppItem item, bool active)
         {
             double size = 42 * K;
-            var img = new Image { Width = 28 * K, Height = 28 * K, Source = ShellIcons.Get(item.IconPath) ?? ShellIcons.Generic, SnapsToDevicePixels = true };
+            var source = ShellIcons.Get(item.IconPath) ?? ShellIcons.Generic;
+            if (item.TvTool != null && item.Tv == false) source = Dimmed(source); // kapalı TV: soluk, gri simge
+            var img = new Image { Width = 28 * K, Height = 28 * K, Source = source, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
             UIElement icon = img;
             var scale = new ScaleTransform(1, 1); var lift = new TranslateTransform();
@@ -224,10 +233,12 @@ namespace KutiDock.Tiles
             if (card) size = 39 * K;
             var grid = new Grid { Width = size, Height = (card ? 39 : 46) * K };
             grid.Children.Add(iconHost); grid.Children.Add(dot);
+            if (item.TvTool != null) AddTvBadge(grid, item.Tv);
             var btn = new Border
             {
                 Width = size, Height = (card ? 39 : 46) * K, CornerRadius = new CornerRadius((card ? 13 : 10) * K), Background = Brushes.Transparent, Child = grid,
-                Tag = item, ToolTip = item.Windows.Count > 0 ? Native.WindowTitle(item.Windows[0]) : item.Name, Cursor = Cursors.Hand,
+                Tag = item, Cursor = Cursors.Hand,
+                ToolTip = item.TvTool != null ? TvStatus.Tooltip(item.Tv) : item.Windows.Count > 0 ? Native.WindowTitle(item.Windows[0]) : item.Name,
             };
             outer = btn;
             if (card)
@@ -254,8 +265,68 @@ namespace KutiDock.Tiles
 
         IntPtr _fgAtPress;
 
+        // Apple sistem renkleri: yeşil (açık), gri (kapalı)
+        static readonly Brush TvOnBrush = Frozen(Color.FromRgb(0x30, 0xD1, 0x58));
+        static readonly Brush TvOffBrush = Frozen(Color.FromRgb(0x8E, 0x8E, 0x93));
+        static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+
+        /// <summary>1.6.12: TV açıkken simgenin sağ üstünde yeşil nokta; kapalıyken altta küçük gri "kapalı" rozeti.</summary>
+        void AddTvBadge(Grid grid, bool? on)
+        {
+            if (on == true)
+            {
+                grid.Children.Add(new Ellipse
+                {
+                    Width = 9 * K, Height = 9 * K, Fill = TvOnBrush, Stroke = Frozen(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)), StrokeThickness = 1.3 * K,
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3 * K, 3 * K, 0),
+                    IsHitTestVisible = false,
+                });
+            }
+            else if (TvStatus.Badge(on) is { } text)
+            {
+                grid.Children.Add(new Border
+                {
+                    Background = TvOffBrush, CornerRadius = new CornerRadius(4 * K), Padding = new Thickness(3.5 * K, 0, 3.5 * K, 0.5 * K),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 0.5 * K),
+                    IsHitTestVisible = false,
+                    Child = new TextBlock { Text = text, FontSize = 7.5 * K, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White },
+                });
+            }
+        }
+
+        /// <summary>Simgenin gri ve soluk kopyası (saydamlık korunur); büyütme katmanı da aynı görüntüyü çizer.</summary>
+        static ImageSource Dimmed(ImageSource src)
+        {
+            if (src is not BitmapSource bs) return src;
+            try
+            {
+                var rect = new Rect(0, 0, bs.Width, bs.Height);
+                var gray = new FormatConvertedBitmap(bs, PixelFormats.Gray8, null, 0);
+                var group = new DrawingGroup { Opacity = 0.42, OpacityMask = new ImageBrush(bs) };
+                group.Children.Add(new ImageDrawing(gray, rect));
+                var di = new DrawingImage(group);
+                di.Freeze();
+                return di;
+            }
+            catch (Exception) { return src; }
+        }
+
+        /// <summary>1.6.12: TV Aç-Kapat: pencere açılmaz, sıçrama/Genie yok; düzen değişikliği bitince durum yeniden okunur.</summary>
+        void ToggleTv(AppItem it)
+        {
+            try { Process.Start(new ProcessStartInfo(it.Launch) { UseShellExecute = true }); } catch (Exception) { return; }
+            foreach (var ms in TvStatus.RecheckAfterClickMs)
+            {
+                var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+                var tool = it.TvTool;
+                t.Tick += (_, _) => { t.Stop(); TvDisplay.Read(tool); _signature = ""; try { Refresh(); } catch (Exception) { } };
+                t.Start();
+            }
+        }
+
         void Click(AppItem it, FrameworkElement target)
         {
+            if (it.TvTool != null && it.Launch != null) { ToggleTv(it); return; }
             var alive = it.Windows.Where(Native.IsWindowVisible).ToList();
             if (alive.Count == 0) { Launch(it, target); return; }
             var fg = _fgAtPress != IntPtr.Zero ? _fgAtPress : Native.GetForegroundWindow();

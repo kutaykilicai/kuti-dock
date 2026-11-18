@@ -1,5 +1,17 @@
 # Değişiklik günlüğü
 
+## 1.6.12 (2026-11-18)
+- TV Aç-Kapat simgesi artık TV'nin durumunu gösterir. Dock, sabitlenmiş kısayolun hedefi `TvEkranGecis.exe` olunca
+  simgeyi TV düğmesi sayar. TV açıkken simge normal renkte ve sağ üstünde yeşil bir nokta var; kapalıyken simge gri ve
+  soluk, altında küçük gri "kapalı" rozeti. Üzerine gelince "TV: Açık" ya da "TV: Kapalı" yazar.
+- Durum CCD API'siyle okunur (`QueryDisplayConfig`, tüm yollar): TV'nin etkin bir yolu varsa açık, yalnızca etkin olmayan
+  yolu varsa kapalı. TV, TvEkranGecis'in `ayarlar.json`'undaki EDID anahtarı (`GSM0001`) ve adıyla (`LG TV`) tanınır;
+  dosya yoksa adında "TV" geçen tek ekran (birden çoksa HDMI olan) alınır. Windows ekran ayarı değişince
+  (`DisplaySettingsChanged`) hemen, ayrıca en geç 3 sn'de bir ve tıklamadan 0,7 / 1,8 / 4 sn sonra yeniden okunur.
+  Durum değişimleri hata.log'a ("TV durumu: ...").
+- TV simgesine tıklamak sıçrama ve Genie başlatmaz (araç pencere açmaz).
+- Testler: kısayol hedefinin tanınması, ayarlar.json ipucu, Kasa'daki gerçek üç ekranla açık/kapalı/bilinmiyor, iki TV'de HDMI tercihi, Türkçe metinler.
+
 ## 1.6.11 (2026-11-18)
 - Arama panelinde, kutunun altında küçük bir **Everything** anahtarı (Apple tarzı). Ayarlar'daki "Aramada Everything
   kullan" ile aynı ayar (`SearchWithEverything`), değişince `ayarlar.json`'a yazılır. Açılınca Everything çalışmıyorsa
