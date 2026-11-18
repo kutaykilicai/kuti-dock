@@ -505,10 +505,21 @@ namespace KutiDock.Tiles
                 c.Click += (_, _) => { foreach (var h in it.Windows) Native.PostMessage(h, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero); };
                 m.Items.Add(c);
             }
+            // 1.6.13: donmuş uygulama için "Görevi sonlandır" (onaysız, en altta, kırmızı). Korumalı süreçlerde gösterilmez.
+            if (it.Windows.Count > 0 && TaskKiller.Kind(it.Key, it.Windows) != KillKind.None)
+            {
+                m.Items.Add(new Separator());
+                var k = new MenuItem { Header = TaskKill.MenuText, Foreground = KillBrush };
+                var key = it.Key; var name = it.Name; var allWins = it.Windows.ToList();
+                k.Click += (_, _) => { WindowPreview.CloseCurrent(); TaskKiller.End(key, name, allWins); _signature = ""; };
+                m.Items.Add(k);
+            }
             m.PlacementTarget = target;
             m.Placement = Pop.Placement(S.Settings.Edge);
             m.IsOpen = true;
         }
+
+        static readonly Brush KillBrush = Frozen(Color.FromRgb(0xFF, 0x45, 0x3A)); // Apple systemRed (yıkıcı işlem)
 
         static ImageSource img(AppItem it) => it.IconPath == null ? null : ShellIcons.Get(it.IconPath);
     }

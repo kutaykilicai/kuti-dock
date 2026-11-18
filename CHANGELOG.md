@@ -1,5 +1,20 @@
 # Değişiklik günlüğü
 
+## 1.6.13 (2026-11-18)
+- Çalışan bir uygulamanın simgesine sağ tıklayınca menünün en altında kırmızı **Görevi sonlandır**. Onay sormaz;
+  donmuş uygulamada da çalışır, Görev Yöneticisi'ni açmak gerekmez. Simgenin pencerelerinin sahibi süreçler ve aynı
+  exe'den çalışan tüm süreçler alt süreç ağacıyla zorla kapatılır (`Process.Kill(entireProcessTree: true)`). Yönetici
+  olarak çalışan bir süreç kapatılamazsa `taskkill /F /T` yönetici izniyle, pencere açmadan denenir.
+- Paketli (Mağaza) uygulamalarda paylaşılan `ApplicationFrameHost` değil, penceresinin içindeki asıl süreç kapatılır.
+- Chrome/Edge PWA'larında (ör. WhatsApp Web) Chrome'un tamamı kapanmasın diye yalnızca pencereye kapat komutu
+  (`WM_CLOSE`) gider. 3 sn içinde kapanmazsa penceresinin süreci yalnızca bu PWA'nın pencerelerini taşıyorsa
+  sonlandırılır; tarayıcının başka pencerelerini de taşıyorsa sonlandırılmaz ve bu hata.log'a yazılır.
+- Öğe yalnızca uygulama çalışırken görünür. Explorer, Kuti Dock'un kendisi, Windows klasöründeki ve sistem süreçleri
+  (csrss, winlogon, svchost...), oyunlar, Steam ve hile önleyiciler (Marvel Rivals, EasyAntiCheat...) için gösterilmez.
+  Her işlem hata.log'a ("Görevi sonlandır ...").
+- Testler: korumalı ve korumasız süreçler (Kasa'daki gerçek yollar), yalnızca çalışırken gösterim, aynı exe'nin tüm
+  süreçleri, Kuti Dock'un kendini hiç hedeflememesi, paketli uygulamada yalnızca pencere sahipleri, PWA kararı, taskkill argümanları.
+
 ## 1.6.12 (2026-11-18)
 - TV Aç-Kapat simgesi artık TV'nin durumunu gösterir. Dock, sabitlenmiş kısayolun hedefi `TvEkranGecis.exe` olunca
   simgeyi TV düğmesi sayar. TV açıkken simge normal renkte ve sağ üstünde yeşil bir nokta var; kapalıyken simge gri ve
