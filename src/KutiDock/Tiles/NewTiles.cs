@@ -84,8 +84,9 @@ namespace KutiDock.Tiles
             Put(Txt("Grok Bot", 10, w: FontWeights.SemiBold), 0, 0); Put(_bar, 0, 1); Put(_reset, 0, 2); Put(_pct, 0, 3);
             Put(Txt("Haftalık", 10, true), 1, 0); Put(_fresh, 1, 1, 3);
             Child = Row(badge, g);
-            ToolTip = "Tıkla: Cursor limitleri";
+            ToolTip = "Tıkla: Cursor ve diğer yapay zekâ limitleri";
             OnClick(ShowCursor);
+            S.Balances.Changed += OnBalances;
         }
 
         public override void Refresh()
@@ -145,6 +146,11 @@ namespace KutiDock.Tiles
             }
             var (g, live) = S.GrokBotLimit();
             p.Children.Add(Ui.Text($"Grok Bot haftalık: {(Limits.Fraction(g, now) is { } gv ? $"%{gv * 100:0}" : "—")} · {Limits.ResetLabel(g, now)} · {(live ? "Cursor" : "elle")}", 11, Theme.B("#99F5F5F7")));
+            // 1.6.15: diğer yapay zekâ bakiyeleri (AllModels, OpenRouter, Kimi, Gemini)
+            _ai = new StackPanel();
+            FillAi(_ai);
+            p.Children.Add(_ai);
+            if (fetch) _ = S.Balances.Refresh(force: true);
             var links = new WrapPanel();
             links.Children.Add(Pop.Link("Kullanım sayfasını aç", () => { _popup.IsOpen = false; Run("https://cursor.com/dashboard?tab=usage"); }));
             links.Children.Add(Pop.Link("Değerleri gir…", () => { _popup.IsOpen = false; _openSettings(); }));
@@ -152,6 +158,47 @@ namespace KutiDock.Tiles
             if (_popup != null) _popup.IsOpen = false;
             _popup = Pop.Make(this, p, S.Settings.Edge);
             _popup.IsOpen = true;
+        }
+
+        StackPanel _ai;
+
+        void OnBalances() => Dispatcher.BeginInvoke(new Action(() => { if (_popup?.IsOpen == true && _ai != null) FillAi(_ai); }));
+
+        /// <summary>Apple HIG gruplu liste: bölüm başlığı, yuvarlak köşeli kap, ince ayraçlı satırlar.</summary>
+        void FillAi(StackPanel host)
+        {
+            host.Children.Clear();
+            var now = DateTimeOffset.Now;
+            var dim = Theme.B("#99F5F5F7");
+            var header = Ui.Text("DİĞER YAPAY ZEKÂ", 10, Theme.B("#8CF5F5F7"), FontWeights.SemiBold);
+            header.Margin = new Thickness(4, 14, 0, 6);
+            host.Children.Add(header);
+            var list = new StackPanel();
+            host.Children.Add(new Border { Background = Theme.B("#14FFFFFF"), CornerRadius = new CornerRadius(10), Child = list });
+            var first = true;
+            foreach (var pv in AiBalances.Order)
+            {
+                if (!first) list.Children.Add(new Border { Height = 1, Background = Theme.B("#1FFFFFFF"), Margin = new Thickness(12, 0, 0, 0) });
+                first = false;
+                var b = S.Balances.Get(pv);
+                var row = new StackPanel { Margin = new Thickness(12, 8, 12, 8) };
+                var top = new DockPanel();
+                var val = Ui.Text(pv == AiProvider.Gemini ? "Pro" : b?.Value is { } v ? AiBalances.Money(v) : "—", 13, Brushes.White, FontWeights.SemiBold);
+                DockPanel.SetDock(val, Dock.Right); top.Children.Add(val);
+                top.Children.Add(Ui.Text(AiBalances.Name(pv), 13, Brushes.White));
+                row.Children.Add(top);
+                var bottom = new DockPanel { Margin = new Thickness(0, 2, 0, 0) };
+                var url = AiBalances.PageUrl(pv);
+                var link = new Border { Child = Ui.Text("Sayfayı aç", 11, Theme.Accent), Cursor = Cursors.Hand, Background = Brushes.Transparent, Margin = new Thickness(10, 0, 0, 0) };
+                link.MouseLeftButtonUp += (_, e) => { _popup.IsOpen = false; Run(url); e.Handled = true; };
+                DockPanel.SetDock(link, Dock.Right); bottom.Children.Add(link);
+                var st = Ui.Text(pv == AiProvider.Gemini ? AiBalances.GeminiNote : AiBalances.Status(b, now), 11,
+                    b?.Note == "güncellenemedi" ? Theme.Orange : dim);
+                st.TextTrimming = TextTrimming.CharacterEllipsis; st.MaxWidth = 250; st.ToolTip = st.Text;
+                bottom.Children.Add(st);
+                row.Children.Add(bottom);
+                list.Children.Add(row);
+            }
         }
 
         static void AddSummary(StackPanel p, UsageSummary u, DateTimeOffset at, DateTimeOffset now)

@@ -1,5 +1,25 @@
 # Değişiklik günlüğü
 
+## 1.6.15 (2026-11-18)
+- Limit kutucuğu kapalıyken yine yalnızca Grok Bot haftalık limitini gösterir. Tıklayınca açılan panelde Cursor ve
+  Grok Bot satırının altına Apple tarzı gruplu bir "Diğer yapay zekâ" listesi eklendi: AllModels, OpenRouter,
+  Kimi (Moonshot) ve Gemini. Her satırda bakiye, son güncelleme saati ve sağlayıcının kendi sayfasını açan
+  "Sayfayı aç" bağlantısı var.
+- Veriler yalnızca resmi API'lerden ve Kutay'ın API anahtarlarıyla okunur; tarayıcı çerezi, oturum belirteci ya da
+  tarayıcı veritabanı okunmaz, sayfa kazınmaz.
+  - Kimi: `GET https://api.moonshot.ai/v1/users/me/balance` → `available_balance` (yalnızca bakiye sorgusu, kota harcamaz).
+  - AllModels: `GET https://api.allmodels.io/account/balance` → `paid_balance_usd`.
+  - OpenRouter: `GET /api/v1/credits` (total_credits − total_usage, sayfadaki "Total available"; yönetim anahtarı
+    ister). Normal anahtarla 403 dönerse `/api/v1/key`'den yalnızca o anahtarın kalan limiti gösterilir ve bu belirtilir.
+  - Gemini (Pro uygulama limiti): resmi API yok. Satırda yalnızca plan ve "5 saatte bir yenilenir, haftalık limit var"
+    bilgisi ile sayfa bağlantısı var; uydurma yüzde gösterilmez.
+- Anahtarlar `%APPDATA%\KutiDock\api-anahtarlari.dat`'ta Windows DPAPI (CurrentUser) ile şifreli saklanır; ekrana,
+  log'a ve repoya yazılmaz. Ayarlar > Limitler'e anahtar alanları eklendi (boş = değişmez, "-" = sil). Aynı klasöre
+  düz metin `api-anahtarlari.yeni.json` konursa dock açılışta onu şifreli dosyaya katar ve düz metni siler.
+- Yenileme: panel açılınca (en çok 30 sn'de bir) ve 10 dakikada bir. Hata olursa satırda sessizce "güncellenemedi"
+  yazar, son bilinen değer kalır. hata.log'a yalnızca "AI bakiye: <sağlayıcı>: güncellendi / güncellenemedi (HTTP n)".
+- Testler: Kimi/AllModels/OpenRouter yanıt ayrıştırma, sıra ve bağlantılar, anahtar dosyası süzme ve birleştirme, yenileme aralıkları.
+
 ## 1.6.14 (2026-11-18)
 - "Aramada Everything kullan" anahtarı artık Everything'i kendisi yönetir; Everything'i elle açmak gerekmez.
   Önceki sorunlar: Everything yalnızca arama paneli açılınca başlatılıyordu; veritabanı yüklenmeden yapılan

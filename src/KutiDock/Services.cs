@@ -32,6 +32,8 @@ namespace KutiDock
         public string CursorTier; DateTime _tierAt = DateTime.MinValue;
         /// <summary>Kuti Dock'un kendi Cursor girişi (isteğe bağlı; belgelenmemiş API).</summary>
         public readonly CursorAccount Cursor = new();
+        /// <summary>1.6.15: AllModels / OpenRouter / Kimi bakiyeleri (resmi API'ler, DPAPI'li anahtarlar).</summary>
+        public readonly AiBalanceService Balances = new();
 
         /// <summary>
         /// Grok Bot limiti: girişliyse ve son 30 dk'da okunduysa Cursor'dan gelen değer (live = true),
@@ -122,6 +124,7 @@ namespace KutiDock
             }
             if (!_busyTier && (now - _tierAt).TotalHours >= 6) { _busyTier = true; _ = LoadCursorTier(); }
             _ = Cursor.RefreshSand(); // kendi içinde 5 dk sınırı var
+            _ = Balances.Refresh(force: false); // kendi içinde 10 dk sınırı var
         }
 
         public void InvalidateData() { _weatherAt = DateTime.MinValue; _drivesAt = DateTime.MinValue; }

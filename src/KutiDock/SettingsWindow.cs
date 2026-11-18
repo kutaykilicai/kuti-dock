@@ -17,6 +17,7 @@ namespace KutiDock
         readonly Settings _s;
         readonly Action<Settings> _apply;
         readonly CursorAccount _cursor;
+        readonly AiBalanceService _balances;
 
         static readonly (string id, string name)[] AllWidgets =
         {
@@ -27,10 +28,10 @@ namespace KutiDock
 
         readonly Action _openMac;
 
-        public SettingsWindow(Settings current, Action<Settings> apply, CursorAccount cursor, Action openMac = null)
+        public SettingsWindow(Settings current, Action<Settings> apply, CursorAccount cursor, Action openMac = null, AiBalanceService balances = null)
         {
             _openMac = openMac;
-            _orig = current; _apply = apply; _cursor = cursor;
+            _orig = current; _apply = apply; _cursor = cursor; _balances = balances;
             _s = Settings.Deserialize<Settings>(Settings.Serialize(current)); // kopya
             Title = "Kuti Dock · Ayarlar"; Width = 620; Height = 760; MinWidth = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -145,6 +146,7 @@ namespace KutiDock
             CursorLogin(lim);
             LimitFields(lim, "Grok Bot (elle; giriş yoksa ya da okunamazsa kullanılır)", _s.GrokBot);
             LimitFields(lim, "Cursor", _s.Cursor);
+            if (_balances != null) ApiKeyFields(lim);
 
             // Ekran görüntüsü
             var shot = Card(p, "Ekran görüntüsü (ShareX)");
@@ -207,6 +209,36 @@ namespace KutiDock
             logout.Click += (_, _) => { _cursor.Logout(); message = "Çıkış yapıldı, belirteç silindi."; Render(); message = null; };
             Render();
             parent.Children.Add(box);
+        }
+
+        /// <summary>1.6.15: AllModels / OpenRouter / Kimi API anahtarları. Değerler gösterilmez; DPAPI ile şifreli saklanır.</summary>
+        void ApiKeyFields(Panel parent)
+        {
+            parent.Children.Add(Label("Diğer yapay zekâ bakiyeleri (resmi API anahtarlarıyla)"));
+            parent.Children.Add(new TextBlock
+            {
+                Text = "Anahtarlar yalnızca bu PC'de, Windows'un kullanıcıya özel şifrelemesiyle (DPAPI) saklanır; ekranda ve log'da gösterilmez. Boş bırakılan alan değişmez, silmek için \"-\" yaz. OpenRouter'da sayfadaki \"Total available\" değeri için yönetim (management) anahtarı gerekir; normal anahtarla yalnızca o anahtarın kalan limiti okunur. Gemini uygulama limiti için resmi API yok.",
+                Foreground = Brush("#9A9AA0"), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4),
+            });
+            var boxes = new Dictionary<string, PasswordBox>();
+            foreach (var pv in new[] { AiProvider.AllModels, AiProvider.OpenRouter, AiProvider.Kimi })
+            {
+                var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+                var pb = new PasswordBox { Width = 220 };
+                DockPanel.SetDock(pb, Dock.Right); d.Children.Add(pb);
+                d.Children.Add(new TextBlock { Text = AiBalances.Name(pv) + (_balances.HasKey(pv) ? " (kayıtlı)" : " (yok)"), VerticalAlignment = VerticalAlignment.Center });
+                boxes[AiBalances.KeyName(pv)] = pb;
+                parent.Children.Add(d);
+            }
+            var save = new Button { Content = "Anahtarları kaydet", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+            save.Click += (_, _) =>
+            {
+                var m = new Dictionary<string, string>();
+                foreach (var kv in boxes) { m[kv.Key] = kv.Value.Password; kv.Value.Clear(); }
+                _balances.SetKeys(m);
+                save.Content = "Kaydedildi";
+            };
+            parent.Children.Add(save);
         }
 
         static void LimitFields(Panel parent, string name, ManualLimit l)

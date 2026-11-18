@@ -216,7 +216,7 @@ namespace KutiDock
         void OpenSettings()
         {
             if (_settingsWindow != null) { _settingsWindow.Activate(); return; }
-            _settingsWindow = new SettingsWindow(_services.Settings, Apply, _services.Cursor, () => OpenMacSettings());
+            _settingsWindow = new SettingsWindow(_services.Settings, Apply, _services.Cursor, () => OpenMacSettings(), _services.Balances);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
             _settingsWindow.Activate();
