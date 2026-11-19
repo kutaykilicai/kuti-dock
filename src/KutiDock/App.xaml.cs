@@ -359,7 +359,7 @@ namespace KutiDock
             try
             {
                 Directory.CreateDirectory(Services.DataDir);
-                File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}\n");
+                KutiDock.Core.RotatingLog.Append(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}\n");
             }
             catch (Exception) { }
         }
@@ -410,7 +410,7 @@ namespace KutiDock
             try
             {
                 Directory.CreateDirectory(Services.DataDir);
-                File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {ex}\n\n");
+                KutiDock.Core.RotatingLog.Append(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {ex}\n\n");
             }
             catch (Exception) { }
         }

@@ -82,12 +82,14 @@ namespace KutiDock
             if (Fullscreen()) { ClassicGenie.Release(h); _front = IntPtr.Zero; Timer.Stop(); return; } // tam ekrana geçti
             _capturing = true;
             var ui = Dispatcher.CurrentDispatcher;
-            Task.Run(() => ClassicGenie.Capture(h)).ContinueWith(t =>
+            var buffer = ClassicGenie.TakeSpare(); // 1.6.22: yeni dizi yerine eskiyen görüntünün dizisi
+            Task.Run(() => ClassicGenie.Capture(h, ref buffer)).ContinueWith(t =>
             {
                 ui.BeginInvoke(new Action(() =>
                 {
                     _capturing = false;
                     if (t.Status == TaskStatus.RanToCompletion && t.Result is { } c && h == _front) ClassicGenie.SetFresh(h, c);
+                    else ClassicGenie.ReturnSpare(buffer);
                 }));
             });
         }

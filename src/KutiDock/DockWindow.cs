@@ -480,7 +480,7 @@ namespace KutiDock
 
         static void Log(string line)
         {
-            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Dock {line}\n"); }
+            try { KutiDock.Core.RotatingLog.Append(System.IO.Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Dock {line}\n"); }
             catch (Exception) { }
         }
 

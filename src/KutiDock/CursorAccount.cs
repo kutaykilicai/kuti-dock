@@ -137,7 +137,7 @@ namespace KutiDock
         /// <summary>hata.log'a teşhis satırı. Asla URL, belirteç, çerez ya da yanıt değeri verilmez.</summary>
         static void Trace(string line)
         {
-            try { File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Cursor {line}\n"); }
+            try { KutiDock.Core.RotatingLog.Append(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Cursor {line}\n"); }
             catch (Exception) { }
         }
 

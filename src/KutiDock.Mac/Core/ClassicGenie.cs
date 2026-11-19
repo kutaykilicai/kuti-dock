@@ -16,6 +16,7 @@ internal static class ClassicGenie
     static GenieAnimation? _running;
     static readonly HashSet<IntPtr> OwnMinimize = [];          // dock tıklamasıyla başlayan küçültmeler (kanca ikinci kez oynatmasın)
     static (IntPtr Hwnd, GenieCapture Capture, DateTime At)? _fresh; // öndeki pencerenin son görüntüsü
+    static readonly KutiDock.Core.CaptureBuffer Spare = new(); // 1.6.22: kullanılmadan eskiyen görüntünün dizisi
     const int CacheMax = 5; // tam ekran yakalama ~8 MB
 
     static void SetTransitions(IntPtr hwnd, bool disabled)
@@ -114,12 +115,21 @@ internal static class ClassicGenie
     }
 
     /// <summary>Öndeki pencerenin son görüntüsü (arka planda alınır).</summary>
-    public static void SetFresh(IntPtr hwnd, GenieCapture capture) => _fresh = (hwnd, capture, DateTime.UtcNow);
-
-    /// <summary>Arka plan iş parçacığında görüntü; başarısızsa null.</summary>
-    public static GenieCapture? Capture(IntPtr hwnd)
+    public static void SetFresh(IntPtr hwnd, GenieCapture capture)
     {
-        try { return IsWindow(hwnd) && !IsIconic(hwnd) && IsWindowVisible(hwnd) ? GenieCapture.From(hwnd) : null; }
+        // 1.6.22: önceki görüntü kullanılmadı (küçültme olmadı): dizisi bir sonraki yakalamaya yedek
+        if (_fresh is { } old && !ReferenceEquals(old.Capture.Pixels, capture.Pixels)) Spare.Give(old.Capture.Pixels);
+        _fresh = (hwnd, capture, DateTime.UtcNow);
+    }
+
+    /// <summary>1.6.22: arka plan yakalaması için yedek dizi (arayüz iş parçacığında alınır; kullanılmazsa <see cref="ReturnSpare"/>).</summary>
+    public static uint[]? TakeSpare() => Spare.Take();
+    public static void ReturnSpare(uint[]? pixels) => Spare.Give(pixels);
+
+    /// <summary>Arka plan iş parçacığında görüntü; başarısızsa null. <paramref name="buffer"/>: yeniden kullanılacak dizi.</summary>
+    public static GenieCapture? Capture(IntPtr hwnd, ref uint[]? buffer)
+    {
+        try { return IsWindow(hwnd) && !IsIconic(hwnd) && IsWindowVisible(hwnd) ? GenieCapture.From(hwnd, ref buffer) : null; }
         catch (Exception) { return null; }
     }
 

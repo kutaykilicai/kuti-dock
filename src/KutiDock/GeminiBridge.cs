@@ -212,7 +212,7 @@ namespace KutiDock
 
         static void Log(string msg)
         {
-            try { File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Gemini: {msg}\n"); }
+            try { KutiDock.Core.RotatingLog.Append(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Gemini: {msg}\n"); }
             catch (Exception) { }
         }
 

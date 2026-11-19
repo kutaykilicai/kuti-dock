@@ -17,7 +17,17 @@ internal sealed class GenieCapture
     /// <summary>Why the last <see cref="From"/> returned null (for the log).</summary>
     public static string LastFailure { get; private set; } = "";
 
-    public static unsafe GenieCapture? From(IntPtr hwnd)
+    public static GenieCapture? From(IntPtr hwnd)
+    {
+        uint[]? none = null;
+        return From(hwnd, ref none);
+    }
+
+    /// <summary>
+    /// 1.6.22: <paramref name="buffer"/> boyu tutarsa piksellere o dizi kullanılır (yeni dizi ayrılmaz); çıkışta
+    /// kullanılan dizi <paramref name="buffer"/>'dadır, yakalama başarısız olsa da sonraki denemede yeniden kullanılabilir.
+    /// </summary>
+    public static unsafe GenieCapture? From(IntPtr hwnd, ref uint[]? buffer)
     {
         if (!GetWindowRect(hwnd, out var outer)) return Fail("invalid window");
         if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT frame, Marshal.SizeOf<RECT>()) != 0) frame = outer;
@@ -48,7 +58,8 @@ internal sealed class GenieCapture
             int fw = Math.Min(frame.Width, ow - fx), fh = Math.Min(frame.Height, oh - fy);
             if (fw < 40 || fh < 30) return Fail($"visible area {fw}x{fh}");
 
-            var pixels = new uint[fw * fh];
+            var pixels = KutiDock.Core.CaptureBuffer.Fit(buffer, fw * fh);
+            buffer = pixels;
             var src = (uint*)bits;
             bool any = false;
             for (int y = 0; y < fh; y++)

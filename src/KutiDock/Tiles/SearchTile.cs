@@ -437,7 +437,7 @@ namespace KutiDock.Tiles
 
         static void Trace(string line)
         {
-            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Everything: {line}\n"); }
+            try { KutiDock.Core.RotatingLog.Append(System.IO.Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} Everything: {line}\n"); }
             catch (Exception) { }
         }
     }

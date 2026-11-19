@@ -1,5 +1,17 @@
 # Değişiklik günlüğü
 
+## 1.6.22 (2026-11-19)
+- Dock'un belleği zamanla şişiyordu (Kasa'da 1.6.20 süreci ~50 dakikada 550 MB özel bellek). Neden: pencerenin kendi
+  küçültme düğmesindeki Genie için öndeki pencere 2,5 sn'de bir tam çözünürlükte yakalanıyor, her yakalamada yeni bir
+  piksel dizisi ayrılıyordu (2560x1440 pencerede ~14 MB, büyük nesne yığını); eskiler ancak tam GC'de bırakılıyordu.
+  İlk açılış Genie'si de pencere çizilene kadar 70 ms'de bir yeni tam boy dizi ayırıyordu. Artık kullanılmadan eskiyen
+  görüntünün dizisi tek yedek olarak tutulur ve sonraki yakalama, boyut aynıysa ona yazar (`CaptureBuffer`). Genie'ye
+  ya da geri dönüş önbelleğine giden dizi yedeğe girmez, üstüne yazılmaz. Görüntü kalitesi ve yakalama sıklığı aynı:
+  küçültme anında pencere çoktan gizlendiği için yakalama o ana bırakılamaz, ölçek düşürmek de ilk karede bulanıklık
+  yapardı. GDI bitmap'leri zaten her yakalamada hemen siliniyordu.
+- hata.log sınırsız büyüyordu. Artık ~1 MB'ı geçince hata.log.1 olur (tek yedek) ve yeni dosyaya yazılır (`RotatingLog`).
+- Testler: dizi yeniden kullanımı ve tek yedek; log döndürme sınırı ve tek yedek.
+
 ## 1.6.21 (2026-11-19)
 - Oyun (Marvel Rivals, Zelda) ana ekranda tam ekranken fare sol ekranın altına gidince dock orada açılmıyordu.
   Kök neden Kasa hata.log'unda (17:28:09): dock ikinci ekrana taşınmıştı, ama ön planda ikinci ekranda büyütülmüş Chrome

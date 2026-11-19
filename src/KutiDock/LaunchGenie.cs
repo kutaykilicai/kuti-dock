@@ -77,7 +77,7 @@ namespace KutiDock
         /// <summary>hata.log'a ilk açılış kararı (yalnızca uygulama adı ve karar; başlık, yol ya da kimlik yazılmaz).</summary>
         static void Trace(string line)
         {
-            try { File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} İlk açılış Genie: {line}\n"); }
+            try { KutiDock.Core.RotatingLog.Append(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} İlk açılış Genie: {line}\n"); }
             catch (Exception) { }
         }
 
@@ -186,11 +186,12 @@ namespace KutiDock
             guard.Tick += (_, _) => { guard.Stop(); Reveal(hwnd); };
             guard.Start();
 
+            uint[] buffer = null; // 1.6.22: 70 ms'de bir denemede her seferinde yeni tam boy dizi ayrılmasın
             void Poll()
             {
                 Task.Run(() =>
                 {
-                    var c = IsWindow(hwnd) ? GenieCapture.From(hwnd) : null;
+                    var c = IsWindow(hwnd) ? GenieCapture.From(hwnd, ref buffer) : null;
                     return c != null && FrameCheck.HasDetail(c.Pixels, c.Width, c.Height) ? c : null;
                 }).ContinueWith(t => ui.BeginInvoke(new Action(() =>
                 {
