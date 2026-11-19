@@ -313,12 +313,15 @@ public class VideoFullscreenTests
     [Fact]
     public void WindowsSignals()
     {
-        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsD3DFullScreen, false));  // D3D tam ekran video/oyun
-        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsPresentation, false));   // sunum modu
+        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsD3DFullScreen, true));   // D3D oyun, bu ekranda
+        Assert.False(FullscreenRule.Decide(false, FullscreenRule.QunsD3DFullScreen, false)); // D3D oyun başka ekranda: bu ekranı gizleme
+        Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsPresentation, true));    // sunum, bu ekranda
+        Assert.False(FullscreenRule.Decide(false, FullscreenRule.QunsPresentation, false));
         Assert.True(FullscreenRule.Decide(false, FullscreenRule.QunsBusy, true));            // tam ekran uygulama, dock ekranında
         Assert.False(FullscreenRule.Decide(false, FullscreenRule.QunsBusy, false));          // başka ekranda: gizleme
         Assert.False(FullscreenRule.Decide(false, 5, true));                                 // QUNS_ACCEPTS_NOTIFICATIONS (normal)
         Assert.True(FullscreenRule.Decide(true, 5, true));
+        Assert.True(FullscreenRule.Decide(true, FullscreenRule.QunsD3DFullScreen, false));  // geometri her zaman yeter
     }
 
     [Fact]

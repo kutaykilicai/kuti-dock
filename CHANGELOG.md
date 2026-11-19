@@ -8,6 +8,12 @@
   çubuğu bekçisi yeni sürece devredilir, çubuk geri getirilmez. En fazla 2 dakikada bir ve saatte üç kez
   (`cizim-yeniden.json`); hata.log: "Çizim motoru çöktü, dock yeniden başlatılıyor". Genie aygıtı da kayıptan
   sonra yeniden kurulur.
+- Tam ekran oyun açıkken (Kasa, ana ekran) dock fareyi ikinci monitöre takip etmiyor, yalnızca ana ekranda açılıyordu.
+  Kök neden: `SHQueryUserNotificationState` D3D tam ekran ve sunum sinyali sistem genelidir; `FullscreenRule.Decide`
+  bunu monitörden bağımsız "her zaman gizle" sayıyordu. Fare ikinci ekranın dış kenarındayken `ForegroundIsFullscreenOn`
+  yine true dönüyor, `DockMonitors.Choose` taşımıyordu; dock ana ekranda `_hiddenForFullscreen` ile gizli kalıyordu.
+  Menü çubuğu 1.6.18'den beri monitör başına (log: yalnızca DISPLAY25 için "hidden (full-screen app)"). Artık D3D/sunum/
+  QUNS_BUSY de yalnızca ön plan o monitördeyse gizler; oyunun olduğu ekranda dock çıkmaz, diğer ekranın kenarında açılır.
 - İlk açılış Genie'si Hızlı İndir'de üst üste iki katman gibi duruyordu. Kök neden (hata.log): süreç 13:10'da
   bir kez açılmıştı, Genie o anda bir kez oynadı; aynı süreç 13:41 ve 13:42'de pencere yeniden gösterilince
   (tepsi ya da gizleme) yine "sistem geneli ilk pencere" sanılıp tekrar oynatıldı. Üstüne WPF penceresinde

@@ -84,11 +84,12 @@ public static class FullscreenRule
     public const int QunsBusy = 2, QunsD3DFullScreen = 3, QunsPresentation = 4;
 
     /// <summary>
-    /// Geometri kuralına Windows'un kendi "tam ekran" sinyali eklenir: D3D tam ekran (oyun/video) ya da sunum modu
-    /// her zaman gizler; QUNS_BUSY (tam ekran uygulama) yalnızca ön plan penceresi dock'un monitöründeyse gizler.
+    /// Geometri kuralına Windows'un kendi "tam ekran" sinyali eklenir. QUNS_D3D_FULL_SCREEN, sunum ve QUNS_BUSY
+    /// sistem genelidir; karar yine monitör başına: ön plan bu monitördeyse gizler, başka monitördeyse gizlemez
+    /// (1.6.19: oyundayken fare ikinci ekranın kenarına gidince dock orada açılsın).
     /// </summary>
     public static bool Decide(bool geometry, int quns, bool foregroundOnDockMonitor) =>
-        geometry || quns is QunsD3DFullScreen or QunsPresentation || (quns == QunsBusy && foregroundOnDockMonitor);
+        geometry || ((quns is QunsD3DFullScreen or QunsPresentation or QunsBusy) && foregroundOnDockMonitor);
 }
 
 /// <summary>

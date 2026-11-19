@@ -107,7 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
-- **1.6.19** Ekran kartı sıfırlanınca bozulan çizim motorunda dock kendini yeniden başlatır. İlk açılış Genie'si asıl pencereyi cloak ile gizler; aynı süreçte bir kez oynar.
+- **1.6.19** Ekran kartı sıfırlanınca bozulan çizim motorunda dock kendini yeniden başlatır. İlk açılış Genie'si asıl pencereyi cloak ile gizler; aynı süreçte bir kez oynar. Tam ekran oyunda dock fareyi diğer monitöre takip eder.
 - **1.6.18** Üst menü çubuğu tam ekran oyunda (Marvel Rivals) gizlenir; kaçırılan Explorer bildirimi ve monitör başına geometri kontrolü.
 - **1.6.17** Lively duvar kağıdı bekçisi: duvar kağıtları kaybolursa (dock yeniden başlaması, ekran değişikliği) pencere açmadan geri yükler; tam ekran oyunda çalışmaz.
 - **1.6.16** Limit panelinde Gemini Güncel ve Haftalık kullanım kartları (Chrome eklentisi `extensions/gemini-usage` ile, yalnızca 127.0.0.1).

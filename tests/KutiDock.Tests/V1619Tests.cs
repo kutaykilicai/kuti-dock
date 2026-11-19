@@ -75,3 +75,23 @@ public class LaunchOnceTests
         Assert.False(LaunchGeniePolicy.AlreadyPlayed(played, @"c:\c\chrome.exe", 3, T.AddSeconds(1)));
     }
 }
+
+/// <summary>
+/// 1.6.19: ana ekranda D3D/tam ekran oyun varken SHQueryUserNotificationState sistem genelidir; dock yine de
+/// fareyi tam ekran olmayan ikinci monitöre takip etmeli, oyun monitöründe gizlenmeli.
+/// </summary>
+public class FullscreenFollowTests
+{
+    const long Main = 1, Side = 2;
+
+    [Fact]
+    public void D3dGameOnPrimary_AllowsFollowToSecondMonitor()
+    {
+        bool fsOnSide = FullscreenRule.Decide(geometry: false, FullscreenRule.QunsD3DFullScreen, foregroundOnDockMonitor: false);
+        bool fsOnMain = FullscreenRule.Decide(geometry: false, FullscreenRule.QunsD3DFullScreen, foregroundOnDockMonitor: true);
+        Assert.False(fsOnSide);
+        Assert.True(fsOnMain);
+        Assert.Equal(Side, DockMonitors.Choose(Main, Side, Main, follow: true, primaryOnly: false, cursorAtOuterEdge: true, fullscreenOnCursorMonitor: fsOnSide));
+        Assert.Equal(Main, DockMonitors.Choose(Main, Main, Main, true, false, true, fullscreenOnCursorMonitor: fsOnMain));
+    }
+}
