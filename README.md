@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.17**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.19**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,8 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.19** Ekran kartı sıfırlanınca bozulan çizim motorunda dock kendini yeniden başlatır. İlk açılış Genie'si asıl pencereyi cloak ile gizler; aynı süreçte bir kez oynar.
+- **1.6.18** Üst menü çubuğu tam ekran oyunda (Marvel Rivals) gizlenir; kaçırılan Explorer bildirimi ve monitör başına geometri kontrolü.
 - **1.6.17** Lively duvar kağıdı bekçisi: duvar kağıtları kaybolursa (dock yeniden başlaması, ekran değişikliği) pencere açmadan geri yükler; tam ekran oyunda çalışmaz.
 - **1.6.16** Limit panelinde Gemini Güncel ve Haftalık kullanım kartları (Chrome eklentisi `extensions/gemini-usage` ile, yalnızca 127.0.0.1).
 - **1.6.15** Limit panelinde AllModels, OpenRouter, Kimi (Moonshot) bakiyeleri (resmi API, DPAPI ile şifreli anahtarlar) ve Gemini sayfa bağlantısı.

@@ -53,6 +53,22 @@ public static class LaunchGeniePolicy
         string className, string processName, bool game) =>
         !ownProcess && !toolOrOwned && hasFrame && !game && width >= 200 && height >= 120
         && !Blocked.Contains(className) && !BlockedProcesses.Contains(processName);
+
+    /// <summary>1.6.19: bir süreç açılışında ya da aynı uygulamanın birkaç saniye içindeki ikinci penceresinde tekrar oynatma.</summary>
+    public const int PerAppCooldownMs = 4000;
+    public const int PerProcessMs = 12 * 60 * 60 * 1000; // aynı süreç (tepsiye inip saatler sonra açılma); pid bu sürede yenilenmez
+
+    public readonly record struct LaunchPlay(string Key, int ProcessId, DateTime AtUtc);
+
+    public static bool AlreadyPlayed(IEnumerable<LaunchPlay> recent, string key, int processId, DateTime nowUtc)
+    {
+        foreach (var p in recent)
+        {
+            if (p.ProcessId == processId && nowUtc - p.AtUtc < TimeSpan.FromMilliseconds(PerProcessMs)) return true;
+            if (AppGrouping.SameKey(p.Key, key) && nowUtc - p.AtUtc < TimeSpan.FromMilliseconds(PerAppCooldownMs)) return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>Yakalanan karede gerçek içerik var mı: tamamen siyah ya da tek renk (henüz çizilmemiş) kare Genie'ye verilmez.</summary>

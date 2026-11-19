@@ -129,6 +129,9 @@ internal sealed class GenieRenderer
     /// <summary>False once the graphics card could not be used (the genie is then skipped).</summary>
     public bool Available { get; private set; } = true;
 
+    /// <summary>1.6.19: DXGI device removed/reset. The dock may restart itself; the device is also released so the next job can recreate it.</summary>
+    public static Action? DeviceLost;
+
     public void Enqueue(GenieJob job) => _jobs.Add(job);
 
     void Run()
@@ -151,6 +154,7 @@ internal sealed class GenieRenderer
             {
                 Log.Error(ex, "Genie effect");
                 ReleaseDevice(); // device lost or broken: start over next time
+                if (KutiDock.Core.RenderRestartPolicy.IsRenderFailure(ex)) NotifyDeviceLost();
                 job.Post(job.Started);
                 job.Post(job.Finished);
                 job.Post(job.Ended);
@@ -198,8 +202,14 @@ internal sealed class GenieRenderer
         {
             Log.Error(ex, "Genie effect: the graphics card cannot be used");
             ReleaseDevice();
+            if (KutiDock.Core.RenderRestartPolicy.IsRenderFailure(ex)) NotifyDeviceLost();
             return false;
         }
+    }
+
+    static void NotifyDeviceLost()
+    {
+        try { DeviceLost?.Invoke(); } catch (Exception) { }
     }
 
     void ReleaseDevice()

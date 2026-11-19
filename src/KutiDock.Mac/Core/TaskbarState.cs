@@ -112,6 +112,20 @@ internal static class TaskbarState
     }
 
     /// <summary>
+    /// 1.6.19: hands the hidden-taskbar marker to a successor so the guard does not restore on a planned restart.
+    /// </summary>
+    public static void TransferOwner(int newPid)
+    {
+        if (newPid <= 0) return;
+        using (Lock())
+        {
+            var marker = ReadMarker();
+            if (marker is null || marker.OwnerPid != Environment.ProcessId) return;
+            WriteMarker(new Marker(marker.OriginalState, newPid));
+        }
+    }
+
+    /// <summary>
     /// Puts the user's taskbar state back and shows every taskbar, if one of our processes hid it.
     /// With <paramref name="onlyForPid"/>, only if that process was the one. <paramref name="force"/>
     /// shows the taskbars even without a marker (emergency command line).

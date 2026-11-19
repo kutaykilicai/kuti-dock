@@ -1,5 +1,23 @@
 # Değişiklik günlüğü
 
+## 1.6.19 (2026-11-19)
+- Ekran kartı kısa süre sıfırlanınca (Kasa, 13:33, DXGI_ERROR_DEVICE_REMOVED) WPF çizim motoru
+  UCEERR_RENDERTHREADFAILURE (0x88980406) ile çöküyor, hata.log'a yazılıp Handled sayılıyordu; dock kesik ve
+  mor ışıntılı kalıyordu, yalnızca elle yeniden başlatınca düzeliyordu. Artık bu hata ya da Genie tarafında DXGI
+  aygıt kaybı görünce dock kendini bir kez yeniden başlatır (`--autostart`): tek kopya mutex'i bırakılır, görev
+  çubuğu bekçisi yeni sürece devredilir, çubuk geri getirilmez. En fazla 2 dakikada bir ve saatte üç kez
+  (`cizim-yeniden.json`); hata.log: "Çizim motoru çöktü, dock yeniden başlatılıyor". Genie aygıtı da kayıptan
+  sonra yeniden kurulur.
+- İlk açılış Genie'si Hızlı İndir'de üst üste iki katman gibi duruyordu. Kök neden (hata.log): süreç 13:10'da
+  bir kez açılmıştı, Genie o anda bir kez oynadı; aynı süreç 13:41 ve 13:42'de pencere yeniden gösterilince
+  (tepsi ya da gizleme) yine "sistem geneli ilk pencere" sanılıp tekrar oynatıldı. Üstüne WPF penceresinde
+  WS_EX_LAYERED + alpha 0 DWM yüzeyini kapatmadığı için asıl pencere görünür kalıyor, Genie kopyası üstünde
+  oynuyordu. Artık pencere animasyon boyunca DWMWA_CLOAK ile gizlenir, yalnızca sonda açılır; bir süreç
+  açılışında ve aynı uygulamada birkaç saniye içinde en fazla bir kez oynar. Aynı yol diğer uygulamalarda da
+  kullanılır: hata.log'da steamwebhelper (üç saniye arayla iki oynatma) ve Lively için de ikinci tetik görünür.
+- Testler: HResult tanıma (UCE/DXGI, iç istisna), 2 dk ve saatte 3 sınırı, kayıt yuvarlak turu; aynı süreçte
+  ve birkaç saniyelik pencerede ikinci oynatmanın reddi.
+
 ## 1.6.18 (2026-11-19)
 - Üstteki menü çubuğu tam ekran oyunun (Marvel Rivals) üstünde kalmaz. Kök neden: çubuk tam ekranı yalnızca Explorer'ın
   `ABN_FULLSCREENAPP` bildiriminden öğreniyordu. Kasa'da iki monitör olduğu için bildirim, ön plan penceresi çubuğun

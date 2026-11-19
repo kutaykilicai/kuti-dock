@@ -12,8 +12,8 @@ namespace KutiDock
     /// <summary>
     /// 1.6.6: dock'tan çalışmıyorken başlatılan uygulamanın (Chrome PWA, normal uygulama, dosya, klasör) ilk penceresi
     /// Genie ile simgeden büyüyerek açılır. EVENT_OBJECT_SHOW ile beklenen pencere (AUMID/exe anahtarı) yakalanır, Windows'un
-    /// açılış animasyonu kapatılır ve pencere ilk dolu karesi çizilene kadar saydam tutulur (siyah/boş kare görünmez);
-    /// sonra o kareyle Genie oynar ve son karede pencere görünür olur. 5 sn'de pencere yoksa, kare 1,5 sn'de dolmazsa,
+    /// açılış animasyonu kapatılır ve pencere ilk dolu karesi çizilene kadar DWM'den gizlenir (cloak; siyah/boş kare görünmez);
+    /// sonra o kareyle Genie oynar ve son karede pencere görünür olur. 5 sn'de pencere yoksa, kare 2 sn'de dolmazsa,
     /// tam ekranda, oyunda ya da UAC'de normal açılışa düşer.
     /// </summary>
     internal static class LaunchGenie
@@ -21,15 +21,13 @@ namespace KutiDock
         delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
         [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc proc, uint pid, uint tid, uint flags);
         [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
-        [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte alpha, uint flags);
-        [DllImport("user32.dll")] static extern bool GetLayeredWindowAttributes(IntPtr h, out uint key, out byte alpha, out uint flags);
         [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
         [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int value, int size);
         const uint EVENT_OBJECT_SHOW = 0x8002, WINEVENT_OUTOFCONTEXT = 0, WINEVENT_SKIPOWNPROCESS = 2;
         const long WS_EX_LAYERED = 0x80000, WS_EX_TOOLWINDOW = 0x80, WS_CAPTION = 0xC00000, WS_THICKFRAME = 0x40000;
-        const uint LWA_ALPHA = 2;
         const int DWMWA_TRANSITIONS_FORCEDISABLED = 3;
+        const int DWMWA_CLOAK = 13; // 1.6.19: DWM bileşiminde pencereyi gizler (WPF'de alpha 0 yetmez)
 
         sealed class Pending
         {
@@ -54,6 +52,7 @@ namespace KutiDock
         static readonly List<Pending> Waiting = new();
         static readonly HashSet<IntPtr> Hidden = new();
         static readonly HashSet<IntPtr> Done = new(); // bir pencere için en fazla bir kez
+        static readonly List<LaunchGeniePolicy.LaunchPlay> Played = new(); // 1.6.19: süreç/uygulama başına bir kez
         static DispatcherTimer _expire;
 
         /// <summary>Dock simgesinden başlatma: anahtarı (AppGrouping) beklenen ilk pencere Genie ile açılır.</summary>
@@ -150,6 +149,11 @@ namespace KutiDock
                 Done.Add(hwnd);
                 var dock = p.Target()?.Item3 ?? IntPtr.Zero;
                 if (Native.ForegroundIsFullscreen(dock)) { Trace($"atlandı ({exe}): tam ekran"); return; }
+                var now = DateTime.UtcNow;
+                Played.RemoveAll(x => now - x.AtUtc > TimeSpan.FromMilliseconds(LaunchGeniePolicy.PerProcessMs));
+                if (LaunchGeniePolicy.AlreadyPlayed(Played, key, (int)pid, now))
+                { Trace($"atlandı ({exe}): aynı süreçte veya birkaç saniye içinde zaten oynatıldı"); return; }
+                Played.Add(new LaunchGeniePolicy.LaunchPlay(key, (int)pid, now));
                 Trace($"bulundu ({exe}): {(viaDock ? "dock'tan başlatıldı" : "sistem geneli ilk pencere")}");
                 if (Peek()) Trace($"dock kısa süre gösterildi ({exe})");
                 Play(hwnd, p, exe);
@@ -159,11 +163,10 @@ namespace KutiDock
 
         static void Play(IntPtr hwnd, Pending p, string exe)
         {
-            // Windows'un açılış animasyonu kapatılır, pencere ilk dolu karesine kadar saydam tutulur
+            // Windows'un açılış animasyonu kapatılır; pencere DWM'den gizlenir (cloak). WPF pencerelerinde
+            // WS_EX_LAYERED + alpha 0 gerçek yüzeyi kapatmaz, Genie kopyası üstte oynarken asıl pencere görünür kalırdı.
             int on = 1; DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref on, 4);
-            long ex = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
-            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex | WS_EX_LAYERED));
-            SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+            int cloak = 1; DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, 4);
             Hidden.Add(hwnd);
             var ui = Dispatcher.CurrentDispatcher;
             var until = DateTime.UtcNow.AddMilliseconds(LaunchGeniePolicy.PaintTimeoutMs);
@@ -211,15 +214,13 @@ namespace KutiDock
             Delay(Poll);
         }
 
-        /// <summary>Pencere eski hâline döner: tam opak, eklenen WS_EX_LAYERED kaldırılır, Windows animasyonu geri açılır.</summary>
+        /// <summary>Pencere eski hâline döner: DWM cloak kaldırılır, Windows animasyonu geri açılır.</summary>
         static void Reveal(IntPtr hwnd)
         {
             if (!Hidden.Remove(hwnd) || !IsWindow(hwnd)) return;
             try
             {
-                SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
-                long ex = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
-                Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex & ~WS_EX_LAYERED));
+                int cloak = 0; DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, 4);
                 int off = 0; DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref off, 4);
                 // Pencere önde kalırsa, kendi küçültme düğmesinin Genie'si (1.6.4) için animasyon yine bu pencerede kapalı tutulur
                 var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };

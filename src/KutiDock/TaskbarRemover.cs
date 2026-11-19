@@ -189,6 +189,18 @@ namespace KutiDock
             return list;
         }
 
+        /// <summary>1.6.19: planlı yeniden başlatmada işareti yeni sürece devreder; bekçi eski süreç bitince çubuğu geri getirmez.</summary>
+        public static void TransferOwner(int newPid)
+        {
+            if (newPid <= 0) return;
+            using (Lock())
+            {
+                var m = ReadMarker();
+                if (m == null || m.OwnerPid != Environment.ProcessId) return;
+                WriteMarker(new Marker(m.OriginalState, newPid));
+            }
+        }
+
         /// <summary>Kullanıcının görev çubuğu durumunu geri koyar ve tüm çubukları gösterir (yalnızca işaret o sürece aitse).</summary>
         public static bool Restore(int ownerPid)
         {

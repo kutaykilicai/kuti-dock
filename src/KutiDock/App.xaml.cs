@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -13,6 +14,7 @@ namespace KutiDock
     public partial class App : Application
     {
         static Mutex _single;
+        static int _selfRestart; // 0 hazır, 1 deneniyor, 2 yeni kopya başlatıldı
         Services _services;
         WallpaperGuard _wallpaperGuard;
         DockWindow _dock, _dockRight;           // Kuti widget şeridi (Mac dock açıkken altta sol ve sağ grup)
@@ -43,14 +45,31 @@ namespace KutiDock
             _single = new Mutex(true, "KutiDock.TekKopya", out bool first);
             if (!first) { Shutdown(); return; }
 
-            DispatcherUnhandledException += (_, ex) => { Log(ex.Exception); ex.Handled = true; };
+            DispatcherUnhandledException += (_, ex) =>
+            {
+                Log(ex.Exception); ex.Handled = true;
+                if (RenderRestartPolicy.IsRenderFailure(ex.Exception)) TrySelfRestart();
+            };
+            KutiDock.Mac.Core.GenieRenderer.DeviceLost += () =>
+            {
+                var d = Current?.Dispatcher;
+                if (d == null) TrySelfRestart();
+                else if (d.CheckAccess()) TrySelfRestart();
+                else d.BeginInvoke(new Action(TrySelfRestart));
+            };
             AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
             {
-                Log(ex.ExceptionObject as Exception); AppBar.RestoreTaskbar(); TaskbarRemover.SetEnabled(false);
+                Log(ex.ExceptionObject as Exception);
+                if (Volatile.Read(ref _selfRestart) == 2) return;
+                AppBar.RestoreTaskbar(); TaskbarRemover.SetEnabled(false);
                 try { LaunchGenie.RevealAll(); } catch (Exception) { } // saydam tutulan yeni pencere görünür kalsın
                 KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
             };
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
+            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            {
+                if (Volatile.Read(ref _selfRestart) == 2) return;
+                KutiDock.Mac.Core.TaskbarState.Restore(onlyForPid: Environment.ProcessId);
+            };
             // Oturum açılışında Explorer görev çubuğunu kurmadan başlamış olabilir: tepsi ve app bar'lar onu ister
             if (e.Args.Contains(KutiDock.Mac.Core.AutoStart.AutoStartArg)) WaitForExplorer();
 
@@ -275,9 +294,74 @@ namespace KutiDock
             try { _mac?.ReleaseShell(); } catch (Exception) { } // Mac dock menüsünden "Çık" da buraya gelir
             StopClassicMenuBar(); // ayrılan üst şerit ve tepsi geri verilir
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); _tray = null; }
-            AppBar.RestoreTaskbar();
-            TaskbarRemover.SetEnabled(false);
+            if (Volatile.Read(ref _selfRestart) != 2)
+            {
+                AppBar.RestoreTaskbar();
+                TaskbarRemover.SetEnabled(false);
+            }
             base.OnExit(e);
+        }
+
+        /// <summary>
+        /// 1.6.19: çizim motoru çökünce (WPF UCEERR_RENDERTHREADFAILURE veya DXGI aygıt kaybı) aynı exe
+        /// --autostart ile bir kez daha açılır, mutex ve görev çubuğu bekçisi yeni sürece devredilir.
+        /// En fazla 2 dakikada bir ve saatte üç kez (kayıt %APPDATA%\KutiDock\cizim-yeniden.json).
+        /// </summary>
+        static void TrySelfRestart()
+        {
+            if (Interlocked.CompareExchange(ref _selfRestart, 1, 0) != 0) return;
+            try
+            {
+                Directory.CreateDirectory(Services.DataDir);
+                var file = Path.Combine(Services.DataDir, "cizim-yeniden.json");
+                var times = RenderRestartPolicy.Parse(File.Exists(file) ? File.ReadAllText(file) : null);
+                var now = DateTime.UtcNow;
+                if (!RenderRestartPolicy.ShouldRestart(times, now))
+                {
+                    Interlocked.Exchange(ref _selfRestart, 0);
+                    return;
+                }
+                File.WriteAllText(file, RenderRestartPolicy.Serialize(RenderRestartPolicy.Record(times, now)));
+                LogLine("Çizim motoru çöktü, dock yeniden başlatılıyor");
+
+                var exe = Environment.ProcessPath;
+                if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
+                {
+                    Interlocked.Exchange(ref _selfRestart, 0);
+                    return;
+                }
+                try { _single?.ReleaseMutex(); } catch (Exception) { }
+                try { _single?.Dispose(); } catch (Exception) { }
+                _single = null;
+
+                var psi = new ProcessStartInfo(exe) { UseShellExecute = false };
+                psi.ArgumentList.Add(KutiDock.Mac.Core.AutoStart.AutoStartArg);
+                var child = Process.Start(psi);
+                if (child == null)
+                {
+                    Interlocked.Exchange(ref _selfRestart, 0);
+                    return;
+                }
+                TaskbarRemover.TransferOwner(child.Id);
+                KutiDock.Mac.Core.TaskbarState.TransferOwner(child.Id);
+                Interlocked.Exchange(ref _selfRestart, 2);
+                Current.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                Log(ex);
+                Interlocked.Exchange(ref _selfRestart, 0);
+            }
+        }
+
+        static void LogLine(string line)
+        {
+            try
+            {
+                Directory.CreateDirectory(Services.DataDir);
+                File.AppendAllText(Path.Combine(Services.DataDir, "hata.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}\n");
+            }
+            catch (Exception) { }
         }
 
         /// <summary>
