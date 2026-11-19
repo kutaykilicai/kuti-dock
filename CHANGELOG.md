@@ -1,5 +1,21 @@
 # Değişiklik günlüğü
 
+## 1.6.20 (2026-11-19)
+- Zelda (totk, ana ekranda kenarlıksız tam ekran) açıkken fare ikinci ekranın altına gelince dock yine açılmıyordu.
+  1.6.19'daki monitör başına QUNS kararı doğruydu ama yetmedi. Kod yolundan ve hata.log'dan çıkan neden (oyun 16:43'te
+  kapandığı için canlı ölçüm alınamadı, aşağıdaki tanı satırları bunun için): dock fareyle ikinci ekrana taşınınca tam ekran
+  denetimi (`CheckFullscreen`) dock'un mantıksal monitörüne değil pencerenin o anki yerine bakıyordu. İkinci ekran
+  1920 piksel, dock'un doğal genişliği 2135 piksel; taşımada yerleşim yeniden ölçüldüğü için `Place` pencereyi
+  yerinden oynatmadan dönüyordu ve pencere bir süre ana ekranda (oyunun üstünde) kalıyordu. Denetim oyunu görüp
+  `_hiddenForFullscreen` koyuyor, `CheckHover` da bu bayrakla erken dönüp ikinci ekrandaki kenarı yok sayıyordu.
+  Artık tam ekran kararı fareyi takip eden dock'ta dock'un mantıksal monitörü için verilir ve `Place` yerleşim
+  değişse de pencereyi hemen hedef monitöre alır. Oyunun ekranında dock çıkmaz, ikinci ekranın altında açılır.
+- Tanı için hata.log'a iki kısa satır: fare bir dış dock kenarına her geldiğinde "Dock kenar: ..." (fare, ekran,
+  pencere yeri, gizleme bayrakları, ön plan süreci/sınıfı/dikdörtgeni, QUNS) ve tam ekran gizleme başlayıp
+  bittiğinde "Dock tam ekran gizledi/bitti: ...". Kenarda dururken satır tekrarlanmaz.
+- Testler: Kasa'nın gerçek monitör düzeniyle (ikinci ekran solda, -1920,272) dış kenar, oyun ekranında gizleme,
+  ikinci ekrana taşıma; geride kalan pencere yerinin artık dock'u gizlememesi.
+
 ## 1.6.19 (2026-11-19)
 - Ekran kartı kısa süre sıfırlanınca (Kasa, 13:33, DXGI_ERROR_DEVICE_REMOVED) WPF çizim motoru
   UCEERR_RENDERTHREADFAILURE (0x88980406) ile çöküyor, hata.log'a yazılıp Handled sayılıyordu; dock kesik ve

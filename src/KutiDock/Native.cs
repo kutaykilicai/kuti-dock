@@ -269,6 +269,23 @@ namespace KutiDock
         }
 
         [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
+
+        /// <summary>1.6.20 tanı: monitörün piksel dikdörtgeni (ana ekran işaretli).</summary>
+        public static string Describe(IntPtr monitor) =>
+            MonitorBox(monitor, out var b, out _) ? $"ekran[{b.Left},{b.Top},{b.Right},{b.Bottom}]{(monitor == PrimaryMonitor() ? " ana" : "")}" : "ekran?";
+
+        /// <summary>1.6.20 tanı: ön plan penceresinin süreci, sınıfı, dikdörtgeni, başlığı ve SHQueryUserNotificationState değeri.</summary>
+        public static string ForegroundSummary()
+        {
+            IntPtr fg = GetForegroundWindow();
+            int quns = SHQueryUserNotificationState(out var q) == 0 ? q : 0;
+            if (fg == IntPtr.Zero) return $"yok quns={quns}";
+            GetWindowThreadProcessId(fg, out uint pid);
+            string exe = System.IO.Path.GetFileNameWithoutExtension(ProcessPath(pid) ?? "?");
+            bool caption = (GetWindowLongPtr(fg, GWL_STYLE).ToInt64() & WS_CAPTION) == WS_CAPTION;
+            string rect = GetWindowRect(fg, out var r) ? $"[{r.Left},{r.Top},{r.Right},{r.Bottom}]" : "?";
+            return $"{exe} {ClassName(fg)} {rect} {Describe(MonitorFromWindow(fg, 2))} baslik={caption} quns={quns}";
+        }
         const long WS_CAPTION = 0x00C00000;
 
         static KutiDock.Core.Box Box(RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);

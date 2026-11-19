@@ -242,7 +242,9 @@ namespace KutiDock
                 if (Native.MonitorBox(mon, out _, out var work))
                 {
                     uint md = Native.MonitorDpi(mon);
-                    if (Fit((work.Right - work.Left - 2.0 * DockMonitors.ToPixels(margin, md)) * 96.0 / md)) return; // düzen değişti: SizeChanged yeniden yerleştirir
+                    // Düzen değiştiyse SizeChanged yeniden yerleştirir; 1.6.20: pencere yine de hemen hedef monitöre alınır
+                    // (eskiden burada dönülüyordu, pencere bir süre oyunun olduğu eski monitörde kalıyordu).
+                    Fit((work.Right - work.Left - 2.0 * DockMonitors.ToPixels(margin, md)) * 96.0 / md);
                     int wpx = DockMonitors.ToPixels(w, md), hpx = DockMonitors.ToPixels(h, md), mpx = DockMonitors.ToPixels(margin, md);
                     var (px, py) = DockLayout.Position(set.Edge, work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top, wpx, hpx, mpx);
                     Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)Math.Round(px), (int)Math.Round(py), 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
@@ -279,10 +281,14 @@ namespace KutiDock
 
         void CheckFullscreen()
         {
-            bool fs = _s.Settings.HideOnFullscreen && Native.ForegroundIsFullscreen(_hwnd);
+            if (_hwnd == IntPtr.Zero) return;
+            // 1.6.20: dock'un mantıksal monitörü için karar (pencerenin o anki yeri taşımadan sonra geride kalabiliyor)
+            var mon = (IntPtr)DockMonitors.FullscreenProbe(FollowOn, (long)DockMonitor, (long)Native.MonitorFromWindow(_hwnd, 2));
+            bool fs = _s.Settings.HideOnFullscreen && Native.ForegroundIsFullscreenOn(mon);
             if (_fullscreen.Observe(fs))
             {
                 _hiddenForFullscreen = _fullscreen.State;
+                Log($"tam ekran {(_hiddenForFullscreen ? "gizledi" : "bitti")}: {Native.Describe(mon)}; ön plan {Native.ForegroundSummary()}");
                 // Tam ekrandan çıkınca saklı dock kendiliğinden belirmez; fare kenara gelince belirir
                 if (_hiddenForFullscreen && AutoHideOn) { _auto.Reset(); _autoHidden = true; }
                 UpdateVisibility();
@@ -366,6 +372,7 @@ namespace KutiDock
                     _s.Settings.PrimaryOnly, outer, fsThere);
                 if (chosen == (long)cursorMon) MoveTo(cursorMon);
             }
+            LogEdgeArrival(p, edge, cursorMon);
             if (_hiddenForFullscreen) return;
             if (!Native.MonitorBox(DockMonitor, out var mon, out _)) return;
             bool over = IsVisible && Native.GetWindowRect(_hwnd, out var r) && new Box(r.Left, r.Top, r.Right, r.Bottom).Contains(p.X, p.Y, 12);
@@ -374,6 +381,24 @@ namespace KutiDock
                 _autoHidden = !_auto.Shown;
                 UpdateVisibility();
             }
+        }
+
+        bool _atEdgeLogged;
+        /// <summary>
+        /// 1.6.20 tanı: fare bir monitörün dış dock kenarına her gelişinde bir satır (kenarda dururken tekrar yazılmaz).
+        /// Oyun açıkken dock'un neden açılmadığı hata.log'dan okunabilsin.
+        /// </summary>
+        void LogEdgeArrival(Native.POINT p, DockEdge edge, IntPtr cursorMon)
+        {
+            static bool OnAny(int x, int y) => Native.MonitorAt(x, y, Native.MONITOR_DEFAULTTONULL) != IntPtr.Zero;
+            bool at = Native.MonitorBox(cursorMon, out var cm, out _) && DockMonitors.AtOuterEdge(edge, p.X, p.Y, cm, OnAny);
+            if (at == _atEdgeLogged) return;
+            _atEdgeLogged = at;
+            if (!at) return;
+            string win = Native.GetWindowRect(_hwnd, out var wr) ? $"[{wr.Left},{wr.Top},{wr.Right},{wr.Bottom}] {Native.Describe(Native.MonitorFromWindow(_hwnd, 2))}" : "?";
+            Log($"kenar: fare {p.X},{p.Y} {Native.Describe(cursorMon)}; dock {Native.Describe(DockMonitor)}; pencere {win}; " +
+                $"tamEkranGizli={_hiddenForFullscreen} kenardaSakli={_autoHidden} elleGizli={_userHidden} gorunur={IsVisible} panelAcik={OwnPopupOpen()}; " +
+                $"ön plan {Native.ForegroundSummary()}");
         }
 
         /// <summary>

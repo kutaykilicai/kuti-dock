@@ -34,6 +34,15 @@ public static class DockMonitors
         return current;
     }
 
+    /// <summary>
+    /// 1.6.20: tam ekran kararı hangi monitör için verilir. Fareyi takip eden dock'ta bu, dock'un mantıksal monitörüdür
+    /// (<paramref name="dockMonitor"/>), pencerenin o anki yeri değil: taşımadan hemen sonra yerleşim yeniden ölçülürken
+    /// pencere bir süre eski (oyunun olduğu) monitörde kalabiliyor, tam ekran denetimi de oyunu görüp dock'u gizliyordu.
+    /// Takip kapalıysa pencerenin monitörü kullanılır.
+    /// </summary>
+    public static long FullscreenProbe(bool follow, long dockMonitor, long windowMonitor) =>
+        follow && dockMonitor != 0 ? dockMonitor : windowMonitor;
+
     /// <summary>Per-Monitor V2: DIP boyutunun hedef monitördeki piksel karşılığı.</summary>
     public static int ToPixels(double dip, uint monitorDpi) => (int)Math.Round(dip * monitorDpi / 96.0);
 }
