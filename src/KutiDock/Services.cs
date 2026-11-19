@@ -170,33 +170,28 @@ namespace KutiDock
     /// <summary>GPU yükü: Windows "GPU Engine" sayaçlarındaki 3D motorlarının toplamı. Yoksa -1.</summary>
     internal sealed class PerformanceCounterHelper : IDisposable
     {
-        readonly Dictionary<string, PerformanceCounter> _counters = new();
-        DateTime _listed = DateTime.MinValue; bool _unavailable;
+        // 1.6.21: kategori tek okumada (her 3D motor örneği için ayrı sayaç yerine; bkz. GpuUsage)
+        readonly PerformanceCounterCategory _category = new("GPU Engine");
+        Dictionary<string, (long Raw, long Time)> _previous;
+        bool _unavailable;
 
         public double Read()
         {
             if (_unavailable) return -1;
             try
             {
-                if ((DateTime.Now - _listed).TotalSeconds > 15)
-                {
-                    _listed = DateTime.Now;
-                    var cat = new PerformanceCounterCategory("GPU Engine");
-                    var names = cat.GetInstanceNames().Where(n => n.EndsWith("engtype_3D", StringComparison.OrdinalIgnoreCase)).ToHashSet();
-                    foreach (var k in _counters.Keys.Where(k => !names.Contains(k)).ToList()) { _counters[k].Dispose(); _counters.Remove(k); }
-                    foreach (var n in names.Where(n => !_counters.ContainsKey(n)))
-                    {
-                        var c = new PerformanceCounter("GPU Engine", "Utilization Percentage", n, true);
-                        c.NextValue(); _counters[n] = c;
-                    }
-                }
-                double sum = 0;
-                foreach (var c in _counters.Values) { try { sum += c.NextValue(); } catch (Exception) { } }
-                return Math.Min(100, sum);
+                var current = new Dictionary<string, (long Raw, long Time)>();
+                var data = _category.ReadCategory()["utilization percentage"];
+                if (data == null) { _unavailable = true; return -1; }
+                foreach (InstanceData d in data.Values)
+                    if (GpuUsage.Is3D(d.InstanceName)) current[d.InstanceName] = (d.Sample.RawValue, d.Sample.TimeStamp100nSec);
+                var previous = _previous;
+                _previous = current;
+                return previous == null ? 0 : GpuUsage.Percent(previous, current);
             }
             catch (Exception) { _unavailable = true; return -1; }
         }
 
-        public void Dispose() { foreach (var c in _counters.Values) c.Dispose(); _counters.Clear(); }
+        public void Dispose() { }
     }
 }

@@ -23,11 +23,13 @@ namespace KutiDock
         [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
         [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
         [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte alpha, uint flags);
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int value, int size);
         const uint EVENT_OBJECT_SHOW = 0x8002, WINEVENT_OUTOFCONTEXT = 0, WINEVENT_SKIPOWNPROCESS = 2;
         const long WS_EX_LAYERED = 0x80000, WS_EX_TOOLWINDOW = 0x80, WS_CAPTION = 0xC00000, WS_THICKFRAME = 0x40000;
         const int DWMWA_TRANSITIONS_FORCEDISABLED = 3;
-        const int DWMWA_CLOAK = 13; // 1.6.19: DWM bileşiminde pencereyi gizler (WPF'de alpha 0 yetmez)
+        const int DWMWA_CLOAK = 13; // 1.6.19: DWM bileşiminde pencereyi gizler (yalnızca kendi sürecinin penceresinde çalışır)
+        const uint LWA_ALPHA = 2;
 
         sealed class Pending
         {
@@ -50,7 +52,7 @@ namespace KutiDock
         static readonly WinEventProc Proc = OnShow; // yerel kod çağırır: canlı tutulmalı
         static IntPtr _hook;
         static readonly List<Pending> Waiting = new();
-        static readonly HashSet<IntPtr> Hidden = new();
+        static readonly Dictionary<IntPtr, LaunchGeniePolicy.HideHow> Hidden = new(); // 1.6.21: nasıl gizlendiği (geri açarken)
         static readonly HashSet<IntPtr> Done = new(); // bir pencere için en fazla bir kez
         static readonly List<LaunchGeniePolicy.LaunchPlay> Played = new(); // 1.6.19: süreç/uygulama başına bir kez
         static DispatcherTimer _expire;
@@ -116,7 +118,7 @@ namespace KutiDock
                 // Araç ipuçları, açılır menüler, sahipli iletişim kutuları, çerçevesiz/küçük pencereler: sessizce geç
                 if (!LaunchGeniePolicy.MainWindowShape(toolOrOwned, frame, r.Right - r.Left, r.Bottom - r.Top, Native.ClassName(hwnd))) return;
                 if ((style & 0x20000000) != 0) return; // küçültülmüş gösterildi (WS_MINIMIZE)
-                if (Hidden.Contains(hwnd) || Done.Contains(hwnd)) return;
+                if (Hidden.ContainsKey(hwnd) || Done.Contains(hwnd)) return;
                 bool fromDock = Waiting.Count > 0;
                 if (!fromDock && (DateTime.UtcNow < _armed || !Enabled())) return;
 
@@ -163,11 +165,20 @@ namespace KutiDock
 
         static void Play(IntPtr hwnd, Pending p, string exe)
         {
-            // Windows'un açılış animasyonu kapatılır; pencere DWM'den gizlenir (cloak). WPF pencerelerinde
-            // WS_EX_LAYERED + alpha 0 gerçek yüzeyi kapatmaz, Genie kopyası üstte oynarken asıl pencere görünür kalırdı.
+            // Windows'un açılış animasyonu kapatılır, pencere Genie bitene kadar gizlenir.
+            // 1.6.21: DWMWA_CLOAK başka sürecin penceresinde E_ACCESSDENIED döner (Kasa'da ölçüldü); 1.6.19'dan beri
+            // sonuç denetlenmediği için asıl pencere hiç gizlenmiyor, Genie kopyası üstünde oynuyordu (çift görüntü).
+            // Artık cloak olmazsa saydamlık (WS_EX_LAYERED + alpha 0) denenir ve tuttuğu doğrulanır; WPF gibi stili geri
+            // alan pencerelerde ikisi de tutmaz: Genie hiç oynamaz, pencere normal açılır (tek görüntü).
             int on = 1; DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref on, 4);
-            int cloak = 1; DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, 4);
-            Hidden.Add(hwnd);
+            var how = HideWindow(hwnd);
+            if (how == LaunchGeniePolicy.HideHow.None)
+            {
+                int off = 0; DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref off, 4);
+                Trace($"atlandı ({exe}): pencere başka süreçten gizlenemiyor; çift görüntü olmasın diye normal açılış");
+                return;
+            }
+            Hidden[hwnd] = how;
             var ui = Dispatcher.CurrentDispatcher;
             var until = DateTime.UtcNow.AddMilliseconds(LaunchGeniePolicy.PaintTimeoutMs);
             // Güvenlik: ne olursa olsun pencere en geç 3 sn'de görünür olur
@@ -214,13 +225,36 @@ namespace KutiDock
             Delay(Poll);
         }
 
-        /// <summary>Pencere eski hâline döner: DWM cloak kaldırılır, Windows animasyonu geri açılır.</summary>
+        /// <summary>1.6.21: önce cloak, olmazsa alpha 0; hangisi gerçekten tuttuysa o (hiçbiri değilse None, pencereye dokunulmamış olur).</summary>
+        static LaunchGeniePolicy.HideHow HideWindow(IntPtr hwnd)
+        {
+            int cloak = 1;
+            int hr = DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, 4);
+            long ex = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+            bool layered = false, alpha = false;
+            if (hr != 0)
+            {
+                Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex | WS_EX_LAYERED));
+                layered = (Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64() & WS_EX_LAYERED) != 0;
+                alpha = layered && SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+                if (layered && !alpha) Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex));
+            }
+            return LaunchGeniePolicy.Hide(hr, layered, alpha);
+        }
+
+        /// <summary>Pencere eski hâline döner: gizleme (cloak ya da eklenen saydamlık) kaldırılır, Windows animasyonu geri açılır.</summary>
         static void Reveal(IntPtr hwnd)
         {
-            if (!Hidden.Remove(hwnd) || !IsWindow(hwnd)) return;
+            if (!Hidden.Remove(hwnd, out var how) || !IsWindow(hwnd)) return;
             try
             {
-                int cloak = 0; DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, 4);
+                if (how == LaunchGeniePolicy.HideHow.Cloak) { int cloak = 0; DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, 4); }
+                else
+                {
+                    SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+                    long ex = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+                    Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex & ~WS_EX_LAYERED));
+                }
                 int off = 0; DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref off, 4);
                 // Pencere önde kalırsa, kendi küçültme düğmesinin Genie'si (1.6.4) için animasyon yine bu pencerede kapalı tutulur
                 var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
@@ -232,7 +266,7 @@ namespace KutiDock
 
         public static void RevealAll()
         {
-            foreach (var h in new List<IntPtr>(Hidden)) Reveal(h);
+            foreach (var h in new List<IntPtr>(Hidden.Keys)) Reveal(h);
         }
     }
 }

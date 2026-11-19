@@ -69,6 +69,17 @@ public static class LaunchGeniePolicy
         }
         return false;
     }
+
+    /// <summary>1.6.21: Genie süresince asıl pencere nasıl gizlendi.</summary>
+    public enum HideHow { None, Cloak, Alpha }
+
+    /// <summary>
+    /// 1.6.21: DWMWA_CLOAK yalnızca S_OK dönerse sayılır (başka süreçte E_ACCESSDENIED); değilse eklenen WS_EX_LAYERED
+    /// pencerede kaldıysa ve alpha 0 uygulandıysa saydamlık. İkisi de yoksa None: Genie oynamaz (altta asıl pencere
+    /// görünür kalır, çift görüntü olurdu).
+    /// </summary>
+    public static HideHow Hide(int cloakHr, bool layeredStuck, bool alphaApplied) =>
+        cloakHr == 0 ? HideHow.Cloak : layeredStuck && alphaApplied ? HideHow.Alpha : HideHow.None;
 }
 
 /// <summary>Yakalanan karede gerçek içerik var mı: tamamen siyah ya da tek renk (henüz çizilmemiş) kare Genie'ye verilmez.</summary>

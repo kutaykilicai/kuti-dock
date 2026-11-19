@@ -265,7 +265,7 @@ namespace KutiDock
             bool caption = (GetWindowLongPtr(fg, GWL_STYLE).ToInt64() & WS_CAPTION) == WS_CAPTION;
             bool geometry = KutiDock.Core.FullscreenRule.HidesDock(Box(r), fgMon, dockMon, IsZoomed(fg), ClassName(fg), caption);
             int quns = SHQueryUserNotificationState(out var q) == 0 ? q : 0;
-            return KutiDock.Core.FullscreenRule.Decide(geometry, quns, fgMon == dockMon && !ShellClasses.Contains(ClassName(fg)));
+            return KutiDock.Core.FullscreenRule.Decide(geometry, quns, fgMon == dockMon && !ShellClasses.Contains(ClassName(fg)), caption);
         }
 
         [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);

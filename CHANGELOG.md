@@ -1,5 +1,24 @@
 # Değişiklik günlüğü
 
+## 1.6.21 (2026-11-19)
+- Oyun (Marvel Rivals, Zelda) ana ekranda tam ekranken fare sol ekranın altına gidince dock orada açılmıyordu.
+  Kök neden Kasa hata.log'unda (17:28:09): dock ikinci ekrana taşınmıştı, ama ön planda ikinci ekranda büyütülmüş Chrome
+  vardı ve satır "tamEkranGizli=True quns=2" diyordu. `SHQueryUserNotificationState` (QUNS_BUSY) oyun yüzünden sistem
+  genelinde "meşgul" döner; `FullscreenRule.Decide` bu sinyali "ön plan dock'un ekranında" diye öndeki Chrome'a da
+  yüklüyordu. Artık sinyal yalnızca başlık çubuğu olmayan (kenarlıksız/özel tam ekran) ön plan penceresinde gizler.
+  Oyunun kendi ekranında dock yine çıkmaz; dock odak almadan (WS_EX_NOACTIVATE, ShowActivated=false) açılır, oyuna dokunmaz.
+- İlk açılış Genie'sinde dosya/pencere iki kez görünüyordu (altta asıl pencere, üstte efekt). Kök neden: 1.6.19'da
+  asıl pencereyi gizlemek için konan `DWMWA_CLOAK`, başka sürecin penceresinde E_ACCESSDENIED (0x80070005) döner
+  (Kasa'da ölçüldü) ve sonucu denetlenmiyordu; yani pencere hiç gizlenmiyordu. Artık cloak tutmazsa saydamlık
+  (WS_EX_LAYERED + alpha 0) denenir ve tuttuğu doğrulanır; WPF gibi bu stili geri alan pencerelerde (Hızlı İndir)
+  Genie oynamaz, pencere normal açılır. hata.log: "pencere başka süreçten gizlenemiyor".
+  Dock'tan küçültme ve geri yüklemede sorun yok: küçültmede pencere ilk kareden hemen sonra küçülür, geri yüklemede
+  efekt boyunca pencere zaten küçültülmüş durumdadır.
+- GPU widget'ı her 2 saniyede bir 176 ayrı GPU sayacını tek tek okuyordu (Kasa'da okuma başına ~156 ms CPU, dock
+  gizliyken de; örnek listesi 15 saniyede bir ~4,5 sn). Artık kategori tek seferde okunur (~3 ms), sonuç aynıdır.
+- Testler: Kasa'nın 17:28:09 durumu (oyun ana ekranda, başlıklı Chrome ikinci ekranda), gizleme yöntemi kararı
+  (cloak/saydamlık/hiçbiri), GPU yüzdesi hesabı.
+
 ## 1.6.20 (2026-11-19)
 - Zelda (totk, ana ekranda kenarlıksız tam ekran) açıkken fare ikinci ekranın altına gelince dock yine açılmıyordu.
   1.6.19'daki monitör başına QUNS kararı doğruydu ama yetmedi. Kod yolundan ve hata.log'dan çıkan neden (oyun 16:43'te

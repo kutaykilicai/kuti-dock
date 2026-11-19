@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.20**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.21**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.21** Oyun ana ekrandayken ikinci ekranda başlıklı bir pencere öndeyse de dock orada açılır. İlk açılış Genie'sinde asıl pencere gerçekten gizlenir, gizlenemiyorsa Genie oynamaz (çift görüntü yok). GPU ölçümü çok daha az CPU harcar.
 - **1.6.20** Oyun ana ekranda tam ekranken dock ikinci ekranın altında açılır; tam ekran kararı dock'un bulunduğu monitör için verilir. Tanı satırları hata.log'da.
 - **1.6.19** Ekran kartı sıfırlanınca bozulan çizim motorunda dock kendini yeniden başlatır. İlk açılış Genie'si asıl pencereyi cloak ile gizler; aynı süreçte bir kez oynar. Tam ekran oyunda dock fareyi diğer monitöre takip eder.
 - **1.6.18** Üst menü çubuğu tam ekran oyunda (Marvel Rivals) gizlenir; kaçırılan Explorer bildirimi ve monitör başına geometri kontrolü.

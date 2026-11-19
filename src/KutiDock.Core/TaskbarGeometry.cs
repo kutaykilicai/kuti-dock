@@ -87,9 +87,12 @@ public static class FullscreenRule
     /// Geometri kuralına Windows'un kendi "tam ekran" sinyali eklenir. QUNS_D3D_FULL_SCREEN, sunum ve QUNS_BUSY
     /// sistem genelidir; karar yine monitör başına: ön plan bu monitördeyse gizler, başka monitördeyse gizlemez
     /// (1.6.19: oyundayken fare ikinci ekranın kenarına gidince dock orada açılsın).
+    /// 1.6.21: sinyal başlık çubuklu bir pencereye de yüklenmez. Oyun ana ekranda açıkken (QUNS_BUSY) ikinci ekrandaki
+    /// Chrome öne gelince "ön plan bu monitörde" doğru oluyordu ve ikinci ekrandaki dock da gizleniyordu; sinyali
+    /// üreten oyun, öndeki pencere değil. Başlıksız (kenarlıksız/özel tam ekran) ön plan penceresinde eskisi gibi gizler.
     /// </summary>
-    public static bool Decide(bool geometry, int quns, bool foregroundOnDockMonitor) =>
-        geometry || ((quns is QunsD3DFullScreen or QunsPresentation or QunsBusy) && foregroundOnDockMonitor);
+    public static bool Decide(bool geometry, int quns, bool foregroundOnDockMonitor, bool foregroundHasCaption = false) =>
+        geometry || ((quns is QunsD3DFullScreen or QunsPresentation or QunsBusy) && foregroundOnDockMonitor && !foregroundHasCaption);
 }
 
 /// <summary>
