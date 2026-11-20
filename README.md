@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.22**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.23**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.23** Monitör uyanışında Lively'nin "Gezgin iki kez yeniden başladı" uyarısı giderildi (tepsi hizmeti çubuklar yeniden kurulurken kapatılmaz); duvar kağıdı bekçisi uyanışta da bakar.
 - **1.6.22** Genie görüntüleri için bellek yeniden kullanılır (dock'un belleği şişmez); hata.log 1 MB'ta hata.log.1'e döner.
 - **1.6.21** Oyun ana ekrandayken ikinci ekranda başlıklı bir pencere öndeyse de dock orada açılır. İlk açılış Genie'sinde asıl pencere gerçekten gizlenir, gizlenemiyorsa Genie oynamaz (çift görüntü yok). GPU ölçümü çok daha az CPU harcar.
 - **1.6.20** Oyun ana ekranda tam ekranken dock ikinci ekranın altında açılır; tam ekran kararı dock'un bulunduğu monitör için verilir. Tanı satırları hata.log'da.

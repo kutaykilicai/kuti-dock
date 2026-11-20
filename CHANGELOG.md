@@ -1,5 +1,19 @@
 # Değişiklik günlüğü
 
+## 1.6.23 (2026-11-20)
+- Monitör uykudan uyanınca Lively "Windows Gezgini son 30 saniye içinde iki kez yeniden başlatıldı" uyarısını açıp
+  duvar kağıtlarını durduruyordu; Gezgin aslında çökmüyordu. Kök neden Kasa'daki kayıtlarda (14:43:14-17): ana ekran
+  (DISPLAY1) uyurken bağlantısı kopuyor, DISPLAY2 iki saniyeliğine birincil oluyor, sonra eski haline dönüyor. Menü
+  çubukları her birincil ekran değişiminde yeniden kuruluyor, tepsi hizmeti de her seferinde kapatılıp yenisi
+  açılıyordu. ManagedShell hem kapanışta hem açılışta `TaskbarCreated` yayınlar; Lively bu mesajda
+  `FindWindow("Shell_TrayWnd")` sahibinin PID'ine bakar ve önce Explorer'ı (dock'un penceresi kapalıyken), sonra dock'u
+  görür. Lively log'unda dört "pid mismatch" (10960 ile 14260 arası) ve "multiple times in the last 30s" satırları var.
+  Artık tepsi paneli menü çubuklarının ortak tek nesnesi: çubuklar yeniden kurulurken kapatılmaz, yeni birincil
+  çubuğa taşınır. Yalnızca menü çubuğu kapatılınca ya da dock kapanınca bırakılır. Tepsi simgeleri ve davranışı aynı.
+- Duvar kağıdı bekçisi artık uykudan dönüşte ve ekran yeniden açılınca da 5 sn sonra bakar (önceden yalnızca ekran
+  ayarı değişince). Açılıştaki ilk ekran bildirimi sayılmaz.
+- Testler: tepsi panelinin yalnızca MenuBars'ta kurulduğu, çubuk kapanınca bırakılmadığı; bekçinin uyanış olayları.
+
 ## 1.6.22 (2026-11-19)
 - Dock'un belleği zamanla şişiyordu (Kasa'da 1.6.20 süreci ~50 dakikada 550 MB özel bellek). Neden: pencerenin kendi
   küçültme düğmesindeki Genie için öndeki pencere 2,5 sn'de bir tam çözünürlükte yakalanıyor, her yakalamada yeni bir

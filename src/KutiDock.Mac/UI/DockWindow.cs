@@ -1859,6 +1859,9 @@ internal sealed class DockWindow : Window
         }
     }
 
+    /// <summary>1.6.23: ekran yeniden açıldı (duvar kağıdı bekçisi kısa gecikmeyle bakar).</summary>
+    public static event Action? DisplayOn;
+
     void OnPowerBroadcast(int kind, IntPtr data)
     {
         switch (kind)
@@ -1875,7 +1878,7 @@ internal sealed class DockWindow : Window
                 if (Marshal.PtrToStructure<Guid>(data) != GUID_CONSOLE_DISPLAY_STATE) break;
                 int state = Marshal.ReadInt32(data, 20);
                 if (state == 0) Pause("display off");
-                else if (state == 1) Resume("display off");
+                else if (state == 1 && _pauseReasons.Contains("display off")) { Resume("display off"); DisplayOn?.Invoke(); } // ilk bildirim (açılış) sayılmaz
                 break;
         }
     }

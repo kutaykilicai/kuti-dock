@@ -52,10 +52,12 @@ internal sealed class MenuBarWindow : Window
     bool _placePending;
     IntPtr _placedMonitor;
 
-    public MenuBarWindow(MenuBars owner, string device, bool primary)
+    /// <param name="tray">1.6.23: birincil ekranın çubuğu için MenuBars'ın tek tepsi paneli; diğerleri için null.</param>
+    public MenuBarWindow(MenuBars owner, string device, TrayIconsPanel? tray)
     {
         _owner = owner;
         _device = device;
+        _tray = tray;
         Title = "Kuti Dock Menu Bar";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -89,9 +91,6 @@ internal sealed class MenuBarWindow : Window
         _appButton = Clickable(_appName, 7);
         _appButton.Margin = new Thickness(2, 2, 0, 2);
         _appButton.MouseLeftButtonUp += (_, _) => _menus?.OpenAppMenu(_appButton);
-
-        // One tray service per session: it lives in the primary monitor's bar.
-        if (primary) _tray = new TrayIconsPanel { Margin = new Thickness(0, 2, 4, 2) };
 
         _wifiBack = Glyph("");
         _wifiBack.Opacity = 0.3;
@@ -153,10 +152,10 @@ internal sealed class MenuBarWindow : Window
         ShowClock(_owner.ClockText, _owner.ClockTip);
     }
 
-    /// <summary>Gives the reserved strip and the tray back.</summary>
+    /// <summary>Gives the reserved strip back. 1.6.23: the tray panel is only detached; MenuBars owns it.</summary>
     protected override void OnClosed(EventArgs e)
     {
-        _tray?.Dispose();
+        if (_tray?.Parent is Panel parent) parent.Children.Remove(_tray);
         _appBar?.Dispose();
         _appBar = null;
         _glass.Close();

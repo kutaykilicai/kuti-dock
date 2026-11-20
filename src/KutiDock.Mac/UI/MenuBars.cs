@@ -2,6 +2,7 @@
 // Kuti Dock için uyarlandı (ad, veri klasörü, Türkçe arayüz, Kuti widget entegrasyonu). Lisans: LICENSE-Gravitone.txt
 using System.Diagnostics;
 using System.Globalization;
+using System.Windows;
 using System.Windows.Threading;
 using KutiDock.Mac.Core;
 using static KutiDock.Mac.Interop.NativeMethods;
@@ -28,6 +29,11 @@ internal sealed class MenuBars : IDisposable
     readonly WinEventProc _winEventProc; // kept alive: native code calls it
     readonly Dictionary<string, string> _nameCache = [];
     readonly List<MenuBarWindow> _bars = [];
+    // 1.6.23: tek tepsi hizmeti, çubuklar yeniden kurulurken yaşar. Her kuruluşta yenisi açılınca ManagedShell iki kez
+    // TaskbarCreated yayınlıyordu (kapanışta ve açılışta); Shell_TrayWnd sahibi de dock ile Explorer arasında gidip
+    // geldiği için Lively bunu 30 sn'de iki Gezgin çökmesi sanıp duvar kağıtlarını durduruyordu (monitör uyanışı,
+    // birincil ekran kısa süre değişir).
+    TrayIconsPanel? _tray;
     AppMenus? _menus; // 1.6.6: öndeki uygulamanın menüleri
     IntPtr _foregroundHook;
     // 1.6.18: tam ekran izleme. Ön plan değişince ve ön plan penceresi boyut/konum değiştirince (yalnızca o sürecin
@@ -102,10 +108,11 @@ internal sealed class MenuBars : IDisposable
 
         foreach (var bar in _bars) bar.Close(); // gives the reserved strip (and the tray) back
         _bars.Clear();
-        // The primary first: its tray service must be the one apps find.
         foreach (var display in wanted.OrderByDescending(d => d.IsPrimary))
         {
-            var bar = new MenuBarWindow(this, display.DeviceName, display.IsPrimary);
+            // The tray panel (and its service) moves to the new primary bar instead of being recreated.
+            var tray = display.IsPrimary ? _tray ??= new TrayIconsPanel { Margin = new Thickness(0, 2, 4, 2) } : null;
+            var bar = new MenuBarWindow(this, display.DeviceName, tray);
             _bars.Add(bar);
             bar.Show();
             bar.ShowStatus(_status);
@@ -200,6 +207,8 @@ internal sealed class MenuBars : IDisposable
         _locationHook = IntPtr.Zero;
         foreach (var bar in _bars) bar.Close();
         _bars.Clear();
+        _tray?.Dispose();
+        _tray = null;
         _status.Dispose();
     }
 

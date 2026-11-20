@@ -93,6 +93,7 @@ namespace KutiDock
             CreateTray();
             // 1.6.17: Lively duvar kağıtları kaybolursa pencere açmadan geri yükle (tam ekran oyunda asla).
             _wallpaperGuard = new WallpaperGuard(Dispatcher); _wallpaperGuard.Start();
+            KutiDock.Mac.UI.DockWindow.DisplayOn += () => _wallpaperGuard.Wake("ekran açıldı");
             // 1.6.14: aramadaki Everything anahtarı açıksa Everything dock'la birlikte arka planda (penceresiz) başlar;
             // açılışı yavaşlatmasın diye 8 sn sonra. Anahtar kapalıysa başlatılmaz.
             if (EverythingPolicy.StartWithDock(settings.SearchWithEverything))

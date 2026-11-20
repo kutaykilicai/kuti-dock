@@ -33,9 +33,14 @@ namespace KutiDock
         {
             Schedule(WallpaperGuardPolicy.AfterDockStart, "dock açılışı");
             _periodic.Start();
-            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (_, _) =>
-                _once.Dispatcher.BeginInvoke(new Action(() => Schedule(WallpaperGuardPolicy.AfterDisplayChange, "ekran değişikliği")));
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (_, _) => Wake("ekran değişikliği");
+            // 1.6.23: uykudan dönüşte de kısa gecikmeyle bakılır (ekran açılması Mac dock'tan Wake ile gelir).
+            Microsoft.Win32.SystemEvents.PowerModeChanged += (_, e) => { if (e.Mode == Microsoft.Win32.PowerModes.Resume) Wake("uyanış"); };
         }
+
+        /// <summary>Uyanış/ekran olayı: <see cref="WallpaperGuardPolicy.AfterDisplayChange"/> sonra kontrol (herhangi bir iş parçacığından).</summary>
+        public void Wake(string reason) =>
+            _once.Dispatcher.BeginInvoke(new Action(() => Schedule(WallpaperGuardPolicy.AfterDisplayChange, reason)));
 
         void Schedule(TimeSpan after, string reason)
         {
