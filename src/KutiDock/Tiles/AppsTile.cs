@@ -26,7 +26,8 @@ namespace KutiDock.Tiles
         string _signature = "";
 
         // macOS büyütmesi ve açılış sıçraması (Gravitone'dan uyarlandı, MIT; bkz. Core/Motion.cs)
-        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public Image Img; public string Key; public double Cur = 1, Vel; }
+        sealed class Slot { public FrameworkElement Outer; public ScaleTransform Scale; public TranslateTransform Lift; public Image Img; public string Key; public double Cur = 1, Vel;
+            public TranslateTransform Shift; public ScaleTransform Poof; } // 1.6.24: sürükleme aralığı ve kaldırma "puf"u
         ZoomLayer _zoom;   // büyüyen simgeler dock'un üstünde buraya çizilir (kesilmez, şerit zıplamaz)
         readonly List<Slot> _slots = new();
         readonly Dictionary<string, Bouncer> _bounce = new();
@@ -42,7 +43,12 @@ namespace KutiDock.Tiles
 
         public AppsTile(Services s, Theme t, Func<IntPtr> self) : base(s, t, card: false)
         {
-            _self = self; Child = _panel; Height = 48 * K;
+            _self = self; Height = 48 * K;
+            // 1.6.24: sürükle-bırak ile sabitleme; bırakma yeri göstergesi simgelerin üstünde ayrı katmanda
+            Child = new Grid { Children = { _panel, _overlay } };
+            _panel.Background = Brushes.Transparent; // simgeler arasındaki boşluğa da bırakılabilsin
+            AllowDrop = true;
+            DragEnter += OnDragOver; DragOver += OnDragOver; DragLeave += OnDragLeave; Drop += OnDrop;
             if (DockLayout.Vertical(s.Settings.Edge))
             {
                 _panel.Orientation = Orientation.Vertical; _panel.HorizontalAlignment = HorizontalAlignment.Center;
@@ -79,7 +85,7 @@ namespace KutiDock.Tiles
             bool vertical = DockLayout.Vertical(S.Settings.Edge);
             var edge = S.Settings.Edge;
             double icon = Magnify.ClassicIcon * K, max = Magnify.ClassicMax * K;
-            bool over = IsMouseOver && S.Settings.Magnification;
+            bool over = IsMouseOver && S.Settings.Magnification && !Dragging; // 1.6.24: sürüklerken büyütme yok
             var m = Mouse.GetPosition(_panel);
             bool busy = over;
             var (ox, oy) = DockLayout.ZoomOrigin(edge);
@@ -134,15 +140,12 @@ namespace KutiDock.Tiles
             var list = new List<AppItem>();
             try
             {
-                if (Directory.Exists(PinnedDir))
-                    foreach (var lnk in Directory.GetFiles(PinnedDir, "*.lnk").OrderBy(f => File.GetCreationTimeUtc(f)))
+                foreach (var lnk in Pins.Ordered()) // 1.6.24: .url da; sıra yine oluşturulma zamanı
                     {
-                        var target = ShellIcons.LinkTarget(lnk);
-                        if (target != null && Path.GetFileName(target).Equals("explorer.exe", StringComparison.OrdinalIgnoreCase)) target = null;
-                        var (args, linkAumid) = ShellIcons.LinkIdentity(lnk);
+                        var (key, target) = LinkInfo(lnk);
                         list.Add(new AppItem
                         {
-                            Key = AppGrouping.PinnedKey(lnk, target, args, linkAumid), Name = Path.GetFileNameWithoutExtension(lnk),
+                            Key = key, Name = Path.GetFileNameWithoutExtension(lnk),
                             Launch = lnk, IconPath = lnk, Pinned = true,
                             TvTool = TvStatus.IsTvTool(target) ? target : null,
                         });
@@ -153,8 +156,19 @@ namespace KutiDock.Tiles
             return _pinnedCache = list;
         }
 
+        /// <summary>Kısayolun dock anahtarı ve hedef exe'si (Gezgin kısayolunda hedef yok sayılır).</summary>
+        static (string Key, string Target) LinkInfo(string lnk)
+        {
+            var target = ShellIcons.LinkTarget(lnk);
+            if (target != null && Path.GetFileName(target).Equals("explorer.exe", StringComparison.OrdinalIgnoreCase)) target = null;
+            var (args, linkAumid) = ShellIcons.LinkIdentity(lnk);
+            var appsAumid = target == null ? ShellIcons.LinkAppsFolderAumid(lnk) : null; // 1.6.24: Mağaza uygulaması kısayolu
+            return (AppGrouping.PinnedKey(lnk, target, args, linkAumid, appsAumid), target);
+        }
+
         public override void Refresh()
         {
+            if (Dragging) return; // 1.6.24: sürükleme bitene kadar simgeler yeniden kurulmaz
             var items = Pinned().Select(p => new AppItem { Key = p.Key, Name = p.Name, Launch = p.Launch, IconPath = p.IconPath, Pinned = true, TvTool = p.TvTool }).ToList();
             // 1.6.12: TV Aç-Kapat simgesi TV'nin açık/kapalı durumunu gösterir (CCD; ekran değişince hemen tazelenir)
             foreach (var p in items) if (p.TvTool != null) p.Tv = TvDisplay.State(p.TvTool);
@@ -250,15 +264,19 @@ namespace KutiDock.Tiles
                     Margin = DockLayout.Vertical(edge) ? new Thickness(0, 2 * K, 0, 2 * K) : new Thickness(2 * K, 0, 2 * K, 0),
                 };
             }
-            _slots.Add(new Slot { Outer = outer, Scale = scale, Lift = lift, Img = img, Key = item.Key });
+            var shift = new TranslateTransform(); var poof = new ScaleTransform(1, 1);
+            outer.RenderTransform = new TransformGroup { Children = { poof, shift } }; outer.RenderTransformOrigin = new Point(0.5, 0.5);
+            _slots.Add(new Slot { Outer = outer, Scale = scale, Lift = lift, Img = img, Key = item.Key, Shift = shift, Poof = poof });
             // Windows 11 gibi: üzerinde biraz bekleyince açık pencerelerin canlı önizlemesi
             var hover = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
             hover.Tick += (_, _) => { hover.Stop(); if (btn.IsMouseOver) Preview((AppItem)outer.Tag, btn); };
             btn.MouseEnter += (_, _) => { btn.Background = T.TileHover; hover.Start(); };
             btn.MouseLeave += (_, _) => { btn.Background = Brushes.Transparent; hover.Stop(); };
             // Basıldığı andaki ön pencere (Gravitone gibi): bırakana kadar önizleme/menü odağı değiştirse bile doğru karar
-            btn.PreviewMouseLeftButtonDown += (_, _) => _fgAtPress = Native.GetForegroundWindow();
-            btn.MouseLeftButtonUp += (_, e) => { Click((AppItem)outer.Tag, btn); e.Handled = true; };
+            btn.PreviewMouseLeftButtonDown += (_, e) => { _fgAtPress = Native.GetForegroundWindow(); _press = outer; _pressAt = e.GetPosition(_panel); };
+            btn.MouseMove += (_, e) => DragMove(outer, btn, e);
+            btn.LostMouseCapture += (_, _) => { if (_drag != null && !_dragEnding) CancelDrag(); };
+            btn.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (EndDrag(outer, btn, e)) return; Click((AppItem)outer.Tag, btn); };
             btn.MouseRightButtonUp += (_, e) => { WindowPreview.CloseCurrent(); Menu((AppItem)outer.Tag, btn); e.Handled = true; };
             return outer;
         }
@@ -505,6 +523,14 @@ namespace KutiDock.Tiles
                 c.Click += (_, _) => { foreach (var h in it.Windows) Native.PostMessage(h, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero); };
                 m.Items.Add(c);
             }
+            // 1.6.24: kullanıcının kendi sabitlemesi
+            if (it.Pinned || it.Launch != null)
+            {
+                if (m.Items.Count > 0 && m.Items[^1] is not Separator) m.Items.Add(new Separator());
+                var pin = new MenuItem { Header = it.Pinned ? "Dock'tan kaldır" : "Dock'a sabitle" };
+                pin.Click += (_, _) => { if (it.Pinned) Unpin(it); else PinRunning(it); };
+                m.Items.Add(pin);
+            }
             // 1.6.13: donmuş uygulama için "Görevi sonlandır" (onaysız, en altta, kırmızı). Korumalı süreçlerde gösterilmez.
             if (it.Windows.Count > 0 && TaskKiller.Kind(it.Key, it.Windows) != KillKind.None)
             {
@@ -517,6 +543,233 @@ namespace KutiDock.Tiles
             m.PlacementTarget = target;
             m.Placement = Pop.Placement(S.Settings.Edge);
             m.IsOpen = true;
+        }
+
+        // ───────────── 1.6.24: kullanıcının sabitlemesi (sağ tık, sürükle-bırak, sıralama, dışarı sürükleyip kaldırma) ─────────────
+        // Sabitlenmiş uygulamalar yine görev çubuğunun "User Pinned\TaskBar" kısayollarıdır (bkz. Core/PinFolder.cs).
+
+        static string RemovedDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KutiDock", "kaldirilan-sabitler");
+        static PinFolder Pins => new(PinnedDir, RemovedDir);
+
+        /// <summary>Sürükleme sürerken dock kenara saklanmaz ve simgeler yeniden kurulmaz.</summary>
+        public static bool Dragging { get; private set; }
+
+        readonly Canvas _overlay = new() { IsHitTestVisible = false };
+        System.Windows.Shapes.Rectangle _marker;
+        FrameworkElement _press, _drag; Point _pressAt; int _dragFrom, _dragTo; bool _dragOff, _dragEnding;
+
+        void PinsChanged()
+        {
+            _pinnedCache = null; _signature = "";
+            try { Refresh(); } catch (Exception) { }
+        }
+
+        void Unpin(AppItem it)
+        {
+            if (!it.Pinned || it.Launch == null) return;
+            try { Pins.Remove(it.Launch); } catch (Exception) { }
+            PinsChanged(); // çalışıyorsa sabitlenmemiş uygulama olarak kalır
+        }
+
+        static IEnumerable<string> ShortcutRoots() => new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+        };
+
+        /// <summary>Çalışan uygulamayı sabitler: Başlat menüsü ya da masaüstünde kısayolu varsa onun kopyası, yoksa exe'ye (ya da AUMID'e) yeni kısayol.</summary>
+        void PinRunning(AppItem it, int index = int.MaxValue)
+        {
+            var key = it.Key; var name = it.Name; var target = it.Launch;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    var lnk = PinFolder.FindShortcut(key, PinFolder.Shortcuts(ShortcutRoots()), l => LinkInfo(l).Key);
+                    if (lnk != null) Pins.AddCopy(lnk, index);
+                    else Pins.AddNew(name, path => ShellIcons.CreateLink(path, target), index);
+                }
+                catch (Exception) { }
+                Dispatcher.BeginInvoke(new Action(PinsChanged));
+            });
+        }
+
+        /// <summary>Dock'a bırakılan dosyayı sabitler; zaten sabitliyse yalnızca yerini değiştirir. Sabitlenmiş kaçıncı sıraya gittiğini döndürür.</summary>
+        int PinPath(string path, int index)
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            bool folder = Directory.Exists(path);
+            string key = folder ? null : ext == ".exe" ? path.ToLowerInvariant() : ext == ".lnk" ? LinkInfo(path).Key : path.ToLowerInvariant();
+            var pinned = Pinned();
+            int at = key == null ? -1 : pinned.FindIndex(p => AppGrouping.SameKey(p.Key, key));
+            if (at >= 0)
+            {
+                int to = PinFolder.MoveTarget(at, index);
+                Pins.Move(pinned[at].Launch, to);
+                _pinnedCache = null;
+                return to + 1;
+            }
+            if (ext == ".lnk" || ext == ".url") Pins.AddCopy(path, index);
+            else
+            {
+                string name = folder ? (new DirectoryInfo(path).Name is { Length: > 0 } n ? n : path) : Services.AppName(path);
+                if (string.IsNullOrWhiteSpace(name)) name = Path.GetFileNameWithoutExtension(path);
+                Pins.AddNew(name, p => ShellIcons.CreateLink(p, path), index);
+            }
+            _pinnedCache = null;
+            return index + 1;
+        }
+
+        static List<string> DroppedPaths(IDataObject data)
+        {
+            try
+            {
+                if (data.GetDataPresent(DataFormats.FileDrop) && data.GetData(DataFormats.FileDrop) is string[] files)
+                    return files.Where(PinFolder.CanPin).ToList();
+            }
+            catch (Exception) { }
+            return new List<string>();
+        }
+
+        bool Vertical => DockLayout.Vertical(S.Settings.Edge);
+        double Along(Point p) => Vertical ? p.Y : p.X;
+
+        /// <summary>Sabitlenmiş simgelerin yerleşimdeki yerleri (dönüşümlerden etkilenmez).</summary>
+        List<(double Start, double Size)> PinnedSlots() => _slots.Where(sl => sl.Outer.Tag is AppItem { Pinned: true })
+            .Select(sl => System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(sl.Outer)).Select(r => Vertical ? (r.Top, r.Height) : (r.Left, r.Width)).ToList();
+
+        void OnDragOver(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            if (_drag != null || DroppedPaths(e.Data).Count == 0) { e.Effects = DragDropEffects.None; return; }
+            e.Effects = DragDropEffects.Link;
+            Dragging = true;
+            ShowGap(PinFolder.InsertIndex(PinnedSlots(), Along(e.GetPosition(_panel))));
+        }
+
+        void OnDragLeave(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            var p = e.GetPosition(this); // çocuklar arasında gezinirken de gelir: hâlâ şeridin içindeyse aralık kalır
+            if (p.X >= 0 && p.Y >= 0 && p.X < ActualWidth && p.Y < ActualHeight) return;
+            ClearGap(); Dragging = false;
+        }
+
+        void OnDrop(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            var paths = DroppedPaths(e.Data);
+            int index = PinFolder.InsertIndex(PinnedSlots(), Along(e.GetPosition(_panel)));
+            ClearGap(); Dragging = false;
+            if (paths.Count == 0) return;
+            e.Effects = DragDropEffects.Link;
+            foreach (var path in paths)
+                try { index = PinPath(path, index); } catch (Exception) { }
+            PinsChanged();
+        }
+
+        static readonly IEasingFunction Ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        static void Animate(DependencyObject o, DependencyProperty p, double to, double ms = 220) =>
+            ((IAnimatable)o).BeginAnimation(p, new DoubleAnimation(to, TimeSpan.FromMilliseconds(ms)) { EasingFunction = Ease });
+        DependencyProperty ShiftProp => Vertical ? TranslateTransform.YProperty : TranslateTransform.XProperty;
+
+        /// <summary>Dışarıdan sürüklenen dosya için aralık: önceki simgeler yarım aralık geri, sonrakiler ileri kayar; ortada ince bir çizgi.</summary>
+        void ShowGap(int index)
+        {
+            double gap = 24 * K;
+            for (int i = 0; i < _slots.Count; i++) Animate(_slots[i].Shift, ShiftProp, i < index ? -gap / 2 : gap / 2);
+            var slots = PinnedSlots();
+            double at = slots.Count == 0 ? 0 : index == 0 ? slots[0].Start : index >= slots.Count ? slots[^1].Start + slots[^1].Size
+                : (slots[index - 1].Start + slots[index - 1].Size + slots[index].Start) / 2;
+            if (_marker == null)
+            {
+                _marker = new System.Windows.Shapes.Rectangle { Fill = Theme.Accent, RadiusX = 1.5 * K, RadiusY = 1.5 * K, Opacity = 0 };
+                _overlay.Children.Add(_marker);
+            }
+            double len = 30 * K, thick = 3 * K;
+            _marker.Width = Vertical ? len : thick; _marker.Height = Vertical ? thick : len;
+            if (Vertical) { Canvas.SetLeft(_marker, (_panel.ActualWidth - len) / 2); Animate(_marker, Canvas.TopProperty, at - thick / 2, 120); }
+            else { Canvas.SetTop(_marker, (_panel.ActualHeight - len) / 2); Animate(_marker, Canvas.LeftProperty, at - thick / 2, 120); }
+            Animate(_marker, OpacityProperty, 1, 160);
+        }
+
+        void ClearGap()
+        {
+            foreach (var sl in _slots) Animate(sl.Shift, ShiftProp, 0);
+            if (_marker != null) Animate(_marker, OpacityProperty, 0, 160);
+        }
+
+        /// <summary>Sabitlenmiş simgeyi sürükleme: dock boyunca sıralar; dock'tan uzağa çekilince soluklaşır, bırakılınca kaldırılır.</summary>
+        void DragMove(FrameworkElement outer, FrameworkElement btn, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed) { _press = null; return; }
+            var pos = e.GetPosition(_panel);
+            if (_drag == null)
+            {
+                if (_press != outer || outer.Tag is not AppItem { Pinned: true }) return;
+                if (Math.Abs(pos.X - _pressAt.X) < 6 * K && Math.Abs(pos.Y - _pressAt.Y) < 6 * K) return;
+                _dragFrom = _dragTo = _slots.FindIndex(sl => sl.Outer == outer);
+                if (_dragFrom < 0) return;
+                _drag = outer; _dragOff = false; Dragging = true;
+                WindowPreview.CloseCurrent(); _zoom?.Clear();
+                Panel.SetZIndex(outer, 1);
+                btn.CaptureMouse();
+            }
+            var sl = _slots[_dragFrom];
+            sl.Shift.BeginAnimation(TranslateTransform.XProperty, null); sl.Shift.BeginAnimation(TranslateTransform.YProperty, null);
+            sl.Shift.X = pos.X - _pressAt.X; sl.Shift.Y = pos.Y - _pressAt.Y; // simge imleçle gider
+            double away = S.Settings.Edge switch
+            {
+                DockEdge.Alt => -pos.Y, DockEdge.Ust => pos.Y - _panel.ActualHeight, DockEdge.Sol => pos.X - _panel.ActualWidth, _ => -pos.X,
+            };
+            bool off = away > 40 * K;
+            if (off != _dragOff) { _dragOff = off; Animate(outer, OpacityProperty, off ? 0.35 : 1, 150); }
+            var slots = PinnedSlots();
+            _dragTo = off ? _dragFrom : PinFolder.MoveTarget(_dragFrom, PinFolder.InsertIndex(slots, Along(pos)));
+            double size = slots[_dragFrom].Size;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                if (i == _dragFrom) continue;
+                double to = i > _dragFrom && i <= _dragTo ? -size : i < _dragFrom && i >= _dragTo ? size : 0;
+                Animate(_slots[i].Shift, ShiftProp, to);
+            }
+        }
+
+        /// <summary>Sürükleme bittiyse sıralamayı ya da kaldırmayı uygular ve true döner (tıklama sayılmaz).</summary>
+        bool EndDrag(FrameworkElement outer, FrameworkElement btn, MouseButtonEventArgs e)
+        {
+            _press = null;
+            if (_drag == null) return false;
+            var it = _drag.Tag as AppItem; var el = _drag; int from = _dragFrom, to = _dragTo; bool off = _dragOff;
+            _dragEnding = true; btn.ReleaseMouseCapture(); _dragEnding = false;
+            _drag = null;
+            if (off && it != null)
+            {
+                // "Puf": simge büyüyüp kaybolur, sonra sabitleme kaldırılır
+                var sl = _slots[from];
+                Animate(sl.Poof, ScaleTransform.ScaleXProperty, 1.4, 200); Animate(sl.Poof, ScaleTransform.ScaleYProperty, 1.4, 200);
+                Animate(el, OpacityProperty, 0, 200);
+                var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
+                t.Tick += (_, _) => { t.Stop(); Dragging = false; Unpin(it); };
+                t.Start();
+                return true;
+            }
+            Dragging = false;
+            if (it != null && to != from)
+            {
+                try { Pins.Move(it.Launch, to); } catch (Exception) { }
+                PinsChanged();
+                return true;
+            }
+            CancelDrag();
+            return true;
+        }
+
+        void CancelDrag()
+        {
+            var el = _drag; _drag = null; _press = null; Dragging = false;
+            foreach (var sl in _slots) { Animate(sl.Shift, TranslateTransform.XProperty, 0); Animate(sl.Shift, TranslateTransform.YProperty, 0); }
+            if (el != null) { Animate(el, OpacityProperty, 1, 150); Panel.SetZIndex(el, 0); }
         }
 
         static readonly Brush KillBrush = Frozen(Color.FromRgb(0xFF, 0x45, 0x3A)); // Apple systemRed (yıkıcı işlem)

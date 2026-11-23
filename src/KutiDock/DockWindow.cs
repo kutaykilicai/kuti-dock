@@ -498,6 +498,7 @@ namespace KutiDock
         /// <summary>Dock'un açtığı menü, açılır panel, önizleme ya da arama paneli açıkken dock saklanmaz.</summary>
         static bool OwnPopupOpen()
         {
+            if (Tiles.AppsTile.Dragging) return true; // 1.6.24: simge ya da dosya sürüklenirken dock saklanmaz
             foreach (PresentationSource ps in PresentationSource.CurrentSources)
             {
                 if (ps is not HwndSource hs || hs.IsDisposed || !Native.IsWindowVisible(hs.Handle)) continue;

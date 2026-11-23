@@ -31,9 +31,14 @@ public static class AppGrouping
         return exePath.ToLowerInvariant();
     }
 
-    /// <summary>Sabitlenmiş kısayolun anahtarı: PWA kısayolu → "crx:id", diğerleri hedef exe (yoksa kısayolun kendisi).</summary>
-    public static string PinnedKey(string lnkPath, string? target, string? arguments, string? linkAumid) =>
-        (CrxId(arguments) ?? CrxId(linkAumid)) is { } crx ? "crx:" + crx : (target ?? lnkPath).ToLowerInvariant();
+    /// <summary>
+    /// Sabitlenmiş kısayolun anahtarı: PWA kısayolu → "crx:id", diğerleri hedef exe (yoksa kısayolun kendisi).
+    /// 1.6.24: exe'siz, Uygulamalar klasöründeki bir öğeye giden kısayol (Mağaza uygulaması) → "aumid:…", pencereleriyle eşleşsin.
+    /// </summary>
+    public static string PinnedKey(string lnkPath, string? target, string? arguments, string? linkAumid, string? appsFolderAumid = null) =>
+        (CrxId(arguments) ?? CrxId(linkAumid) ?? CrxId(appsFolderAumid)) is { } crx ? "crx:" + crx
+        : target == null && !string.IsNullOrEmpty(appsFolderAumid) ? "aumid:" + appsFolderAumid.ToLowerInvariant()
+        : (target ?? lnkPath).ToLowerInvariant();
 
     // ── 1.6.7: Chrome pencere AUMID'sinde uygulama kimliğini kısaltır ──
     // Kasa'da: kısayol --app-id=hnpfjngllnobngcgfapefoaidbinmjnm, pencere AUMID'i Chrome._crx_hnpfjngllnfapefoaidbinmjnm

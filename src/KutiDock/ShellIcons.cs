@@ -143,5 +143,69 @@ namespace KutiDock
             }
             catch (Exception) { return null; }
         }
+
+        // ---- 1.6.24: kullanıcının sabitlemesi için kısayol yazma ve Mağaza uygulaması kısayolları ----
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SHParseDisplayName(string name, IntPtr bc, out IntPtr pidl, uint sfgao, out uint psfgao);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SHGetNameFromIDList(IntPtr pidl, uint sigdn, out IntPtr name);
+        const uint SIGDN_DESKTOPABSOLUTEPARSING = 0x80028000;
+        const string AppsFolderPrefix = @"shell:AppsFolder\";
+        [DllImport("shell32.dll")] static extern IntPtr ILClone(IntPtr pidl);
+        [DllImport("shell32.dll")] static extern bool ILRemoveLastID(IntPtr pidl);
+        const string AppsFolderGuid = "::{4234D49B-0245-4DF3-B780-3893943456E1}";
+
+        /// <summary>Uygulamalar klasöründeki bir öğeye (Mağaza uygulaması, PWA) giden kısayolun AUMID'i; değilse null.</summary>
+        public static string LinkAppsFolderAumid(string lnk)
+        {
+            IntPtr pidl = IntPtr.Zero, parent = IntPtr.Zero;
+            try
+            {
+                var link = (IShellLinkW)new CShellLink();
+                ((IPersistFile)link).Load(lnk, 0);
+                link.GetIDList(out pidl);
+                Marshal.ReleaseComObject(link);
+                if (pidl == IntPtr.Zero) return null;
+                // Öğenin ayrıştırma adı yalnızca AUMID'dir; Uygulamalar klasöründe olduğu üst öğeden anlaşılır.
+                parent = ILClone(pidl);
+                if (parent == IntPtr.Zero || !ILRemoveLastID(parent) || !string.Equals(ParsingName(parent), AppsFolderGuid, StringComparison.OrdinalIgnoreCase)) return null;
+                var aumid = ParsingName(pidl);
+                return string.IsNullOrEmpty(aumid) ? null : aumid;
+            }
+            catch (Exception) { return null; }
+            finally { if (pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(pidl); if (parent != IntPtr.Zero) Marshal.FreeCoTaskMem(parent); }
+        }
+
+        static string ParsingName(IntPtr pidl)
+        {
+            if (SHGetNameFromIDList(pidl, SIGDN_DESKTOPABSOLUTEPARSING, out var name) != 0 || name == IntPtr.Zero) return null;
+            try { return Marshal.PtrToStringUni(name); } finally { Marshal.FreeCoTaskMem(name); }
+        }
+
+        /// <summary>
+        /// Kısayol yazar: exe ya da klasör yoluna, ya da "shell:AppsFolder\AUMID" (Mağaza uygulaması) öğesine. Başarısızsa false.
+        /// </summary>
+        public static bool CreateLink(string path, string target)
+        {
+            IntPtr pidl = IntPtr.Zero;
+            try
+            {
+                var link = (IShellLinkW)new CShellLink();
+                if (target.StartsWith(AppsFolderPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (SHParseDisplayName(target, IntPtr.Zero, out pidl, 0, out _) != 0 || pidl == IntPtr.Zero) return false;
+                    link.SetIDList(pidl);
+                }
+                else
+                {
+                    link.SetPath(target);
+                    var dir = Directory.Exists(target) ? target : Path.GetDirectoryName(target);
+                    if (!string.IsNullOrEmpty(dir)) link.SetWorkingDirectory(dir);
+                }
+                ((IPersistFile)link).Save(path, true);
+                Marshal.ReleaseComObject(link);
+                return File.Exists(path);
+            }
+            catch (Exception) { return false; }
+            finally { if (pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(pidl); }
+        }
     }
 }

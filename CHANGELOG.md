@@ -1,5 +1,24 @@
 # Değişiklik günlüğü
 
+## 1.6.24 (2026-11-23)
+- Dock'a kendin uygulama sabitleyebilirsin. Sabitlenmiş uygulamalar eskisi gibi görev çubuğunun
+  `User Pinned\TaskBar` klasöründeki kısayollar, sıra oluşturulma zamanı (`PinFolder`).
+  - Açık, sabitlenmemiş uygulamaya sağ tık: "Dock'a sabitle". Başlat menüsünde ya da masaüstünde o uygulamanın kısayolu
+    varsa (simge, argüman ve AUMID doğru gelsin diye) onun kopyası, yoksa exe'ye yeni kısayol yazılır. Mağaza
+    uygulamaları ve PWA'lar Uygulamalar klasöründeki öğeye (`shell:AppsFolder\AUMID`) giden kısayolla sabitlenir; bu
+    kısayolların anahtarı artık `aumid:…`, açık pencereleriyle aynı simgede toplanır.
+  - Sabitlenmiş uygulamada sağ tık: "Dock'tan kaldır". Kısayol silinmez, `%APPDATA%\KutiDock\kaldirilan-sabitler`
+    klasörüne taşınır. Uygulama açıksa sabitlenmemiş uygulama olarak dock'ta kalır.
+  - Gezgin'den, masaüstünden ya da Bölmeler'den sürüklenen .exe, .lnk, .url ve klasörler bırakılan yere sabitlenir.
+    Sürüklerken simgeler iki yana açılır, araya ince bir vurgu çizgisi gelir. Zaten sabitli olan bırakılırsa yalnızca yeri
+    değişir.
+  - Sabitli simge dock içinde sürüklenerek sıralanır (diğerleri yer açar). Dock'tan uzağa çekilince soluklaşır, bırakılınca
+    "puf" ile kaldırılır. Sürükleme sürerken dock kenara saklanmaz, büyütme durur, simgeler yeniden kurulmaz.
+- `--sabitleme-testi <çıktı.txt>`: pencere açmadan geçici klasörde kısayol yazma, Mağaza uygulaması kısayolu, Başlat menüsü
+  kısayolu bulma, sıralama ve kaldırmayı Windows'ta dener. Gerçek sabitlemelere dokunmaz.
+- Testler: sabitleme, kaldırma (yedeğe taşıma), sıralama, yeniden açılışta sıranın korunması, bırakma sırası, kısayol arama,
+  Mağaza kısayolu anahtarı.
+
 ## 1.6.23 (2026-11-20)
 - Monitör uykudan uyanınca Lively "Windows Gezgini son 30 saniye içinde iki kez yeniden başlatıldı" uyarısını açıp
   duvar kağıtlarını durduruyordu; Gezgin aslında çökmüyordu. Kök neden Kasa'daki kayıtlarda (14:43:14-17): ana ekran
