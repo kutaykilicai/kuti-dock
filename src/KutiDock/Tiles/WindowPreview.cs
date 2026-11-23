@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using KutiDock.Core;
 
@@ -60,6 +61,7 @@ namespace KutiDock.Tiles
         List<IntPtr> _windows;
         IntPtr _hwnd;
         int _outside;
+        byte _alpha; // 1.6.25: önizlemeler panelle birlikte yumuşakça belirir
 
         WindowPreview(object key, List<IntPtr> windows, ImageSource icon, FrameworkElement anchor, DockEdge edge)
         {
@@ -79,10 +81,19 @@ namespace KutiDock.Tiles
                 int dark = 1; DwmSetWindowAttribute(_hwnd, 20, ref dark, 4);     // koyu kenarlık
             };
             Build();
-            ContentRendered += (_, _) => { Place(); UpdateThumbs(); };
+            ContentRendered += (_, _) => { Place(); UpdateThumbs(); FadeIn(); };
             SizeChanged += (_, _) => { Place(); UpdateThumbs(); };
             _watch.Tick += (_, _) => Watch();
             _watch.Start();
+        }
+
+        /// <summary>1.6.25: hafif açılış: kartlar ~140 ms'de belirir, DWM önizlemeleri aynı sürede saydamlıktan gelir.</summary>
+        void FadeIn()
+        {
+            _row.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            t.Tick += (_, _) => { _alpha = (byte)Math.Min(255, _alpha + 32); UpdateThumbs(); if (_alpha == 255) t.Stop(); };
+            t.Start();
         }
 
         void Build()
@@ -95,11 +106,11 @@ namespace KutiDock.Tiles
 
         FrameworkElement Card(IntPtr h)
         {
-            var title = Native.WindowTitle(h);
+            var title = WindowPicker.CardTitle(Native.WindowTitle(h)); // 1.6.25: Gezgin'de yalnızca klasör adı
             var head = new DockPanel { Margin = new Thickness(8, 6, 4, 6), LastChildFill = true };
             var close = new Border
             {
-                Width = 26, Height = 22, CornerRadius = new CornerRadius(4), Background = Brushes.Transparent, Visibility = Visibility.Hidden,
+                Width = 26, Height = 22, CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Visibility = Visibility.Hidden,
                 Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 Cursor = Cursors.Hand, ToolTip = "Pencereyi kapat",
             };
@@ -113,7 +124,7 @@ namespace KutiDock.Tiles
                 RenderOptions.SetBitmapScalingMode(ic, BitmapScalingMode.HighQuality);
                 DockPanel.SetDock(ic, Dock.Left); head.Children.Add(ic);
             }
-            head.Children.Add(new TextBlock { Text = title, Foreground = Brushes.White, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(new TextBlock { Text = title, Foreground = Brushes.White, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
 
             // Önizleme yeri: DWM buraya canlı küçük görüntüyü çizer. Küçültülmüş pencerede görüntü olmaz, büyük simge gösterilir.
             var slot = new Border { Height = ThumbH, Margin = new Thickness(8, 0, 8, 8) };
@@ -121,11 +132,13 @@ namespace KutiDock.Tiles
 
             var card = new Border
             {
-                Width = CardW, CornerRadius = new CornerRadius(6), Margin = new Thickness(2), Background = Brushes.Transparent,
+                // 1.6.25: Apple tarzı 12 px köşe; üzerine gelince #0A84FF çerçeve (kalınlık sabit, düzen kaymaz)
+                Width = CardW, CornerRadius = new CornerRadius(12), Margin = new Thickness(2), Background = Brushes.Transparent,
+                BorderThickness = new Thickness(1.5), BorderBrush = Brushes.Transparent,
                 Child = new DockPanel { Children = { OnTop(head), slot } }, Cursor = Cursors.Hand, ToolTip = title,
             };
-            card.MouseEnter += (_, _) => { card.Background = Theme.B("#FF2D2D2D"); close.Visibility = Visibility.Visible; };
-            card.MouseLeave += (_, _) => { card.Background = Brushes.Transparent; close.Visibility = Visibility.Hidden; };
+            card.MouseEnter += (_, _) => { card.Background = Theme.B("#FF2D2D2D"); card.BorderBrush = Theme.Accent; close.Visibility = Visibility.Visible; };
+            card.MouseLeave += (_, _) => { card.Background = Brushes.Transparent; card.BorderBrush = Brushes.Transparent; close.Visibility = Visibility.Hidden; };
             card.MouseLeftButtonUp += (_, e) => { Native.Activate(h); CloseCurrent(); e.Handled = true; };
             card.MouseUp += (_, e) => { if (e.ChangedButton == MouseButton.Middle) { CloseWindow(h); e.Handled = true; } };
             if (!Native.IsIconic(h)) _thumbs.Add((h, slot, IntPtr.Zero));
@@ -171,7 +184,7 @@ namespace KutiDock.Tiles
                 {
                     dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY,
                     rcDestination = new Native.RECT { Left = (int)x, Top = (int)y, Right = (int)(x + bw), Bottom = (int)(y + bh) },
-                    opacity = 255, fVisible = true, fSourceClientAreaOnly = false,
+                    opacity = _alpha, fVisible = true, fSourceClientAreaOnly = false,
                 };
                 DwmUpdateThumbnailProperties(thumb, ref props);
             }

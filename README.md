@@ -5,7 +5,7 @@ simgesine küçülür; yanında sistem, ses, disk, ağ ve kullanım bilgisi gös
 etkin uygulamanın adını, tepsi simgelerini ve saati gösteren bir menü çubuğu vardır. İsteğe bağlı olarak Windows görev
 çubuğunu tamamen kaldırır.
 
-C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.24**. Eski adı Kutay Dock.
+C#, .NET 8 ve WPF ile yazıldı. Son sürüm: **1.6.25**. Eski adı Kutay Dock.
 
 ![Kuti Dock](docs/screenshots/dock.png)
 
@@ -107,6 +107,7 @@ tests/KutiDock.Tests  xUnit testleri
 
 Ayrıntılar [CHANGELOG.md](CHANGELOG.md) dosyasında.
 
+- **1.6.25** Bir uygulamanın birden çok penceresi varken (iki Gezgin klasörü gibi) simgeye tıklamak pencere seçiciyi açar: her pencere başlığı (Gezgin'de klasör adı) ve canlı önizlemesiyle bir kart, tıklanan öne gelir. Tek pencerede davranış aynı.
 - **1.6.24** Uygulamayı dock'a kendin sabitleyebilirsin: açık uygulamaya sağ tıkla "Dock'a sabitle" (sabitlide "Dock'tan kaldır"), Gezgin'den, masaüstünden ya da Bölmeler'den .exe, .lnk, .url ya da klasör sürükleyip bırak. Sabitli simgeler sürüklenerek sıralanır, dock'tan yukarı çekip bırakınca kaldırılır.
 - **1.6.23** Monitör uyanışında Lively'nin "Gezgin iki kez yeniden başladı" uyarısı giderildi (tepsi hizmeti çubuklar yeniden kurulurken kapatılmaz); duvar kağıdı bekçisi uyanışta da bakar.
 - **1.6.22** Genie görüntüleri için bellek yeniden kullanılır (dock'un belleği şişmez); hata.log 1 MB'ta hata.log.1'e döner.

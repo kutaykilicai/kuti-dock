@@ -1,5 +1,17 @@
 # Değişiklik günlüğü
 
+## 1.6.25 (2026-11-23)
+- İki Gezgin klasörü açıkken dock'tan istenen pencereye ulaşmak zordu: pencerelerden biri öndeyse simgeye tıklamak onu
+  küçültüyor, dock'tan küçültülmüş biri varsa onu geri getiriyordu; seçici ancak üzerinde bekleyince açılıyordu, simgenin
+  ipucu (ilk pencerenin başlığı) da seçicinin üstüne biniyordu. Artık birden çok görünür penceresi olan uygulamada tıklama
+  her zaman pencere seçiciyi açar (üzerinde bekleyince de açılır). Gezgin pencereleri tek explorer.exe sürecinde olsa da
+  pencere (HWND) başına ayrı kart. Tek pencerede davranış aynı (öndeyse küçült, değilse getir).
+- Seçici: kart başlığında Gezgin'de yalnızca klasör adı (" - Dosya Gezgini" atılır), 12 px köşe, üzerine gelince #0A84FF
+  çerçeve, ~140 ms yumuşak açılış (DWM canlı önizlemeleri de saydamlıktan gelir). Birden çok pencerede simge ipucu yok.
+- `--pencere-secici-testi <çıktı.txt>`: pencere açmadan açık pencereleri dock gibi gruplar, birden çok penceresi olan her
+  uygulamada seçicinin kaç kart listeleyeceğini yazar.
+- Testler: tıklama kararı (çok pencere → seçici, tek pencere değişmedi), kart başlığı, ipucu, arayüz bağlantıları.
+
 ## 1.6.24 (2026-11-23)
 - Dock'a kendin uygulama sabitleyebilirsin. Sabitlenmiş uygulamalar eskisi gibi görev çubuğunun
   `User Pinned\TaskBar` klasöründeki kısayollar, sıra oluşturulma zamanı (`PinFolder`).

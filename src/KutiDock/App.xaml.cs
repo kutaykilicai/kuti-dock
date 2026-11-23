@@ -40,6 +40,7 @@ namespace KutiDock
                 case "--ses-tani": SesTani(); Shutdown(0); return; // 1.6.6: pencere açmadan ses arayüzü denetimi
                 case "--everything-tani": EverythingTani(e.Args); return; // 1.6.14: pencere açmadan Everything uçtan uca denetimi
                 case PinSelfTest.Arg: Shutdown(PinSelfTest.Run(e.Args)); return; // 1.6.24: sabitleme mantığı, gerçek sabitlemelere dokunmadan
+                case PickerSelfTest.Arg: Shutdown(PickerSelfTest.Run(e.Args)); return; // 1.6.25: pencere seçici, açık pencereleri yalnızca okur
                 case "--restore-taskbar": KutiDock.Mac.Core.TaskbarState.Restore(force: true); Shutdown(0); return;
                 case KutiDock.Mac.Core.AutoStart.FallbackArg: KutiDock.Mac.Core.TaskbarState.RestoreIfOrphaned(); Shutdown(0); return;
             }

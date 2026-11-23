@@ -252,7 +252,7 @@ namespace KutiDock.Tiles
             {
                 Width = size, Height = (card ? 39 : 46) * K, CornerRadius = new CornerRadius((card ? 13 : 10) * K), Background = Brushes.Transparent, Child = grid,
                 Tag = item, Cursor = Cursors.Hand,
-                ToolTip = item.TvTool != null ? TvStatus.Tooltip(item.Tv) : item.Windows.Count > 0 ? Native.WindowTitle(item.Windows[0]) : item.Name,
+                ToolTip = item.TvTool != null ? TvStatus.Tooltip(item.Tv) : WindowPicker.Tooltip(item.Windows.Count, item.Windows.Count > 0 ? Native.WindowTitle(item.Windows[0]) : null, item.Name), // 1.6.25
             };
             outer = btn;
             if (card)
@@ -352,6 +352,8 @@ namespace KutiDock.Tiles
             // 1.6'daki Genie (Mac dock gibi): öndeki pencere simgeye akarak küçülür; dock'tan küçültülmüş pencere simgeden
             // büyüyerek gelir. Genie olmazsa normal küçültme/öne getirme.
             int front = alive.IndexOf(fg);
+            // 1.6.25: birden çok pencere (iki Gezgin klasörü gibi): her zaman seçici açılır, öndeki küçültülmez
+            if (WindowPicker.Decide(alive.Count, front >= 0) == AppClick.Picker) { Preview(it, target); return; }
             if (front >= 0)
             {
                 WindowPreview.CloseCurrent();
@@ -361,7 +363,6 @@ namespace KutiDock.Tiles
             }
             var back = alive.FirstOrDefault(h => Native.IsIconic(h) && KutiDock.Mac.Core.ClassicGenie.HasCapture(h));
             if (back != IntPtr.Zero && Genie(back, target, true)) { WindowPreview.CloseCurrent(); _signature = ""; return; }
-            if (alive.Count > 1) { Preview(it, target); return; } // birden çok pencere: önizleme panelinden seç
             WindowPreview.CloseCurrent();
             if (!(Native.IsIconic(alive[0]) && Genie(alive[0], target, true))) Native.Activate(alive[0]);
             _signature = ""; // aktif göstergesini tazele
