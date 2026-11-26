@@ -1,5 +1,12 @@
 # Değişiklik günlüğü
 
+## 1.6.27 (2026-11-27)
+- Dock kenarda saklanırken bazen simgeler ekranda takılı kalıyordu. Büyüyen simgeler dock'un üstünde ayrı, en üstte duran
+  şeffaf bir pencereye (büyütme katmanı) çiziliyordu; bu katman dock ile birlikte kaymıyor/solmuyordu, dock gizlenince de
+  çizim başarısız olduğu hâlde temizlenmiyordu (son büyümüş görüntü ekranda kalıyordu). Artık katman yalnızca dock tam
+  görünürken kullanılır, çizilmeyen karede hemen temizlenir; dock saklanmaya başlarken büyütme anında sıfırlanır ve
+  simgeler dock'un içinde onunla birlikte saklanır.
+
 ## 1.6.26 (2026-11-26)
 - WARP: dock'taki bağlan/kes artık yalnızca gizli `warp-cli` çalıştırır. Cloudflare WARP arayüzü (bağlandı sayfası) açılmaz.
 

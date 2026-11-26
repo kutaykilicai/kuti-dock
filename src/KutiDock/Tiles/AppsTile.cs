@@ -85,7 +85,9 @@ namespace KutiDock.Tiles
             bool vertical = DockLayout.Vertical(S.Settings.Edge);
             var edge = S.Settings.Edge;
             double icon = Magnify.ClassicIcon * K, max = Magnify.ClassicMax * K;
-            bool over = IsMouseOver && S.Settings.Magnification && !Dragging; // 1.6.24: sürüklerken büyütme yok
+            // 1.6.27: katman (ayrı pencere) yalnızca dock tam görünürken; saklanırken/gizliyken büyütme anında sıfırlanır
+            bool layerOk = Window.GetWindow(this) is DockWindow dw ? dw.SteadyShown : IsVisible;
+            bool over = ZoomLayerPolicy.Magnify(IsMouseOver, S.Settings.Magnification, Dragging, layerOk); // 1.6.24: sürüklerken büyütme yok
             var m = Mouse.GetPosition(_panel);
             bool busy = over;
             var (ox, oy) = DockLayout.ZoomOrigin(edge);
@@ -94,6 +96,7 @@ namespace KutiDock.Tiles
             {
                 if (!sl.Outer.IsLoaded) continue;
                 double target = 1;
+                if (!layerOk) { sl.Cur = 1; sl.Vel = 0; }
                 if (over)
                 {
                     var c = sl.Outer.TranslatePoint(new Point(sl.Outer.ActualWidth / 2, sl.Outer.ActualHeight / 2), _panel); // yerleşim konumu: büyütmeden etkilenmez
@@ -112,13 +115,14 @@ namespace KutiDock.Tiles
             }
             // Büyüyen ya da zıplayan simge varken hepsi katmanda çizilir; katman kullanılamazsa eski yol (dock içinde dönüşüm).
             bool lifted = draw.Exists(d => d.Scale > 1.0005 || d.LiftX != 0 || d.LiftY != 0);
-            if (lifted && (_zoom ??= new ZoomLayer()).Draw(this, draw, 46 * K))
+            bool drawn = lifted && layerOk && (_zoom ??= new ZoomLayer()).Draw(this, draw, 46 * K);
+            if (ZoomLayerPolicy.KeepLayer(lifted, layerOk, drawn))
             {
                 foreach (var sl in _slots) { sl.Img.Opacity = 0; sl.Scale.ScaleX = sl.Scale.ScaleY = 1; sl.Lift.X = sl.Lift.Y = 0; }
             }
             else
             {
-                if (!lifted) _zoom?.Clear();
+                _zoom?.Clear(); // 1.6.27: çizilmeyen karede eski büyümüş resim ekranda kalmaz (dock gizlenince takılı kalıyordu)
                 for (int i = 0; i < _slots.Count && i < draw.Count; i++)
                 {
                     var sl = _slots[i]; sl.Img.Opacity = 1;
@@ -127,6 +131,21 @@ namespace KutiDock.Tiles
                 }
             }
             if (!busy) { _zoom?.Clear(); foreach (var sl in _slots) sl.Img.Opacity = 1; Loop(false); }
+        }
+
+        /// <summary>
+        /// 1.6.27: dock saklanmaya başlarken/gizlenirken çağrılır: büyütme ve katman hemen sıfırlanır, simgeler dock'un içinde
+        /// normal boyutta kalır (dock ile birlikte kayar/solar). Süren açılış sıçraması dock içinde devam eder.
+        /// </summary>
+        public void ResetZoom()
+        {
+            _zoom?.Clear();
+            foreach (var sl in _slots)
+            {
+                sl.Cur = 1; sl.Vel = 0; sl.Img.Opacity = 1;
+                sl.Scale.ScaleX = sl.Scale.ScaleY = 1; sl.Lift.X = sl.Lift.Y = 0;
+            }
+            if (!_bounce.Values.Any(b => b.IsActive)) Loop(false);
         }
 
         static string PinnedDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

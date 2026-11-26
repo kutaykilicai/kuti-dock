@@ -26,6 +26,8 @@ namespace KutiDock
         Border _body;
         /// <summary>1.6.10: şeridin gövdesi (kayma animasyonu bunun RenderTransform'unda; Genie hedefi bu ötelemeyi çıkarır).</summary>
         public FrameworkElement SlideBody => _body;
+        /// <summary>1.6.27: dock tam görünür (saklanma kayması/solma yok): büyütme katmanı ancak o zaman çizilir.</summary>
+        public bool SteadyShown => ZoomLayerPolicy.LayerAllowed(IsVisible, _hiding, Opacity);
         StackPanel _row;
         List<Tile> _tiles = new();
         Theme _theme;
@@ -490,7 +492,7 @@ namespace KutiDock
             if (OwnPopupOpen()) return; // açık panel/menü varken taşınmaz
             _mon = monitor;
             _fullscreen = new Debounce(2, 8); _hiddenForFullscreen = false; // tam ekran durumu yeni monitör için yeniden ölçülür
-            if (IsVisible) { _hiding = false; Hide(); }
+            if (IsVisible) { _hiding = false; ResetZoom(); Hide(); }
             _auto.Reset(); _autoHidden = true;
             Place();
         }
@@ -525,8 +527,15 @@ namespace KutiDock
             else if (!show && IsVisible && !_hiding)
             {
                 _hiding = true;
-                Anim.Slide(this, _body, _s.Settings.Edge, false, () => { if (_hiding) { _hiding = false; Hide(); } }, dist);
+                ResetZoom(); // 1.6.27: büyümüş simgeler (ayrı katman) dock ile birlikte saklanır, ekranda takılı kalmaz
+                Anim.Slide(this, _body, _s.Settings.Edge, false, () => { if (_hiding) { _hiding = false; ResetZoom(); Hide(); } }, dist);
             }
+        }
+
+        void ResetZoom()
+        {
+            foreach (var t in _tiles)
+                if (t is AppsTile a) { try { a.ResetZoom(); } catch (Exception) { } }
         }
 
         void Refresh()
