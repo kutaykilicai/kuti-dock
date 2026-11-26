@@ -1,5 +1,8 @@
 # Değişiklik günlüğü
 
+## 1.6.26 (2026-11-26)
+- WARP: dock'taki bağlan/kes artık yalnızca gizli `warp-cli` çalıştırır. Cloudflare WARP arayüzü (bağlandı sayfası) açılmaz.
+
 ## 1.6.25 (2026-11-23)
 - İki Gezgin klasörü açıkken dock'tan istenen pencereye ulaşmak zordu: pencerelerden biri öndeyse simgeye tıklamak onu
   küçültüyor, dock'tan küçültülmüş biri varsa onu geri getiriyordu; seçici ancak üzerinde bekleyince açılıyordu, simgenin

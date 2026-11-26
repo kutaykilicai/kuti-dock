@@ -430,9 +430,9 @@ namespace KutiDock.Tiles
     }
 
     /// <summary>
-    /// Cloudflare One Client (WARP): durum + tek tıkla bağlan/kes. Yalnızca warp-cli (pencere açmadan, CreateNoWindow);
-    /// uygulama penceresi açılmaz, kullanım koşulları kendiliğinden kabul edilmez. 1.6.11: WARP Windows açılışında başlamaz;
-    /// dock'tan bağlanırken arayüzü (tepsi) çalışmıyorsa önce o başlatılır.
+    /// Cloudflare One Client (WARP): durum + tek tıkla bağlan/kes. Yalnızca gizli warp-cli (CreateNoWindow);
+    /// uygulama penceresi ve bağlandı sayfası açılmaz, kullanım koşulları kendiliğinden kabul edilmez.
+    /// 1.6.26: bağlanırken de WARP arayüzü başlatılmaz (warp-svc yeterli).
     /// </summary>
     internal sealed class WarpTile : Tile
     {

@@ -11,7 +11,7 @@ Ne bu?
 - Arama panelinde küçük bir Everything anahtarı var (Ayarlar'a gitmeye gerek yok). Açınca Everything çalışmıyorsa dock
   onu arka planda başlatır ve dosyaları Everything ile arar; kapatınca Windows aramasına döner. Ayarlar'daki seçenekle
   aynı ayardır ve kalıcıdır.
-- WARP Windows açılışında başlamasa da olur: dock'taki WARP'a tıklayınca uygulama çalışmıyorsa önce o açılır, sonra bağlanır.
+- WARP: dock'taki tuşa tıklayınca yalnızca gizli warp-cli ile bağlanır/kesilir; Cloudflare WARP penceresi açılmaz.
 
 1.6.10'DA NE DEĞİŞTİ
 - Sıfırdan açılan uygulamalarda Genie animasyonu çoğu zaman oynamıyordu: dock kenarda saklıyken simge "görünmez"

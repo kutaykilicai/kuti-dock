@@ -31,8 +31,8 @@ public enum WarpState { Unknown, Connected, Connecting, Disconnected, NotInstall
 
 public static class Warp
 {
-    /// <summary>1.6.11: WARP Windows açılışında başlamaz; dock'tan bağlanırken arayüz çalışmıyorsa önce o başlatılır.</summary>
-    public static bool ShouldLaunchGui(bool connect, bool guiRunning) => connect && !guiRunning;
+    /// <summary>1.6.26: dock yalnızca gizli warp-cli kullanır; bağlanırken veya kesilirken WARP arayüzü açılmaz.</summary>
+    public static bool ShouldLaunchGui(bool connect, bool guiRunning) => false;
 
     /// <summary>"Status update: Connected" / "Disconnected" / "Connecting" satırlarını okur.</summary>
     public static WarpState Parse(string? output)

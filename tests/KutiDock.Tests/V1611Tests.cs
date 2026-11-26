@@ -1,7 +1,7 @@
 using KutiDock.Core;
 using Xunit;
 
-/// <summary>1.6.11: aramadaki Everything anahtarı Everything'i bulup başlatır; WARP arayüzü yalnızca dock'tan bağlanırken açılır.</summary>
+/// <summary>1.6.11: Everything anahtarı. 1.6.26: WARP arayüzü dock'tan bağlanırken de açılmaz.</summary>
 public class V1611Tests
 {
     [Fact]
@@ -23,9 +23,9 @@ public class V1611Tests
     }
 
     [Theory]
-    [InlineData(true, false, true)]   // bağlan, arayüz kapalı: önce arayüz
+    [InlineData(true, false, false)]  // bağlan, arayüz kapalı: yine de açılmaz
     [InlineData(true, true, false)]   // arayüz zaten açık
     [InlineData(false, false, false)] // bağlantıyı keserken arayüz açılmaz
-    public void Warp_GuiOnlyOnConnect(bool connect, bool guiRunning, bool launch) =>
+    public void Warp_NeverLaunchGui(bool connect, bool guiRunning, bool launch) =>
         Assert.Equal(launch, Warp.ShouldLaunchGui(connect, guiRunning));
 }
